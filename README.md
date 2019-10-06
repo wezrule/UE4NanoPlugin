@@ -1,7 +1,7 @@
 # UE4NanoPlugin
 Plugin for integrating Nano micropayments into Unreal Engine 4
 
-**Currently in Beta. Only tested on Windows Desktop, do not use in production.**
+**Currently in Beta. Only tested on Windows Desktop (UE 4.22.3 VS 2019), do not use in production.**
 
 How to use:
 1. Copy `Plugins` folder to an Unreal Engine project root directory
