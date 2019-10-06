@@ -1,0 +1,16 @@
+{
+  "name": "nanounrealengineserver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "dependencies": {
+    "reconnecting-websocket": "^4.1.10",
+    "ws": "^7.1.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
