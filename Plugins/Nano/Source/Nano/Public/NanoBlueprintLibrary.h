@@ -22,9 +22,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Nano")
 	static FString Subtract(FString raw1, FString raw2);
 
+	// 1 Nano = 10 ^ 6 nano
+	UFUNCTION(BlueprintCallable, Category="Nano")
+	static FString ConvertnanoToRaw(FString nano);
+
 	// Returns true if raw is greater than baseRaw
 	UFUNCTION(BlueprintCallable, Category="Nano")
 	static bool Greater(FString raw, FString baseRaw);
+
+	UFUNCTION(BlueprintCallable, Category="Nano")
+	static bool GreaterOrEqual(FString raw, FString baseRaw);
 
 	UFUNCTION(BlueprintCallable, Category="Nano")
 	static FString CreateSeed();

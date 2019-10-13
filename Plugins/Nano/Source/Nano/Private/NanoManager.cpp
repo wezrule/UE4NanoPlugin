@@ -209,9 +209,11 @@ void UNanoManager::AutomatePocketPendingUtility(const FString& account, const Pr
 		if (!frontierData.error) {
 			Pending(account, [this, frontierData, prvKeyAutomateDelegate_receiver](RESPONSE_PARAMETERS) {
 				auto pendingData = GetPendingResponseData(RESPONSE_ARGUMENTS);
-				if (!pendingData.error && pendingData.blocks.Num() > 0) {
-					AutomateWorkGenerateLoop(frontierData, prvKeyAutomateDelegate_receiver, pendingData.blocks);
-				} else {
+				if (!pendingData.error) {
+					if (pendingData.blocks.Num() > 0) {
+						AutomateWorkGenerateLoop(frontierData, prvKeyAutomateDelegate_receiver, pendingData.blocks);
+					}
+				}else {
 					fireAutomateDelegateError(prvKeyAutomateDelegate_receiver);
 				}
 

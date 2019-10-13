@@ -96,6 +96,29 @@ bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
 }
 
 UFUNCTION(BlueprintCallable, Category="Nano")
+bool UNanoBlueprintLibrary::GreaterOrEqual(FString raw, FString baseRaw) {
+	nano::amount amount1;
+	amount1.decode_dec (TCHAR_TO_UTF8(*raw));
+
+	nano::amount amount2;
+	amount2.decode_dec (TCHAR_TO_UTF8(*baseRaw));
+
+	return amount1 == amount2 || amount1 > amount2;
+}
+
+UFUNCTION(BlueprintCallable, Category="Nano")
+FString UNanoBlueprintLibrary::ConvertnanoToRaw(FString nano_f)
+{
+	nano::amount amount1;
+	amount1.decode_dec (TCHAR_TO_UTF8(*nano_f));
+
+	nano::amount multiplier (nano::xrb_ratio);
+
+	nano::amount new_amount = (amount1.number () * multiplier.number ());
+	return new_amount.to_string_dec ().c_str ();
+}
+
+UFUNCTION(BlueprintCallable, Category="Nano")
 FString UNanoBlueprintLibrary::CreateSeed() {
 	duthomhas::csprng rng;
 	nano::uint256_union seed;

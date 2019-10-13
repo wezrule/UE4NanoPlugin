@@ -29,8 +29,8 @@ public:
 	FTimerHandle timerHandle;
 };
 
-UCLASS(BlueprintType, Blueprintable, ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class NANO_API UNanoManager : public UActorComponent
+UCLASS(BlueprintType, Blueprintable)
+class NANO_API UNanoManager : public UObject
 {
 	GENERATED_BODY()
 
@@ -90,10 +90,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket);
 
-	UPROPERTY(EditAnywhere, Category = "NanoManager")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	FString rpcAddress;
 
-	UPROPERTY(EditAnywhere, Category = "NanoManager")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	int rpcPort;
 
 	UPROPERTY(EditAnywhere, Category = "NanoManager")

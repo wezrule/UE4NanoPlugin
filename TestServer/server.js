@@ -44,6 +44,51 @@ send = (json_string) => {
     });
 };
 
+const WS = require('ws');
+const ReconnectingWebSocket = require('reconnecting-websocket');
+const dpow_wss = new ReconnectingWebSocket(config.dpow.ws_address, [], {
+    WebSocket: WS,
+    connectionTimeout: 1000,
+    maxRetries: 100000,
+    maxReconnectionDelay: 2000,
+    minReconnectionDelay: 10 // if not set, initial connection will take a few seconds by default
+});
+
+let id = 0;
+let using_dpow = false;
+var dpow_request_map = {};
+dpow_wss.onopen = () => {
+    using_dpow = true;
+
+    // dPOW sent us a message
+    dpow_wss.onmessage = msg => {
+        let data_json = JSON.parse(msg.data);
+        console.log(data_json);
+
+        let value_l = dpow_request_map[data_json.id];
+        if (!data_json.hasOwnProperty("error")) {
+
+            let new_response = {};
+            new_response.work = data_json.work;
+            new_response.hash = value_l.hash;
+            value_l.res.end(JSON.stringify(new_response));
+        } else {
+            // dPOW failed to create us work, ask the node to generate it for us (TODO untested)
+            let request = {};
+            request.action = "work_generate";
+            request.hash = value_l.hash;
+
+            send(JSON.stringify(request))
+                .then(rpc_response => {
+                    value_l.res.end(rpc_response);
+                })
+                .catch(e => {
+                    value_l.res.end('{"error":"1"}');
+                });
+        }
+        delete dpow_request_map[data_json.id];
+    };
+};
 const server = http.createServer((req, res) => {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
@@ -96,8 +141,25 @@ const server = http.createServer((req, res) => {
                 .catch(e => {
                     res.end('{"error":"1"}');
                 });
-        }
-        else if (allowed_actions.includes(action)) {
+        } else if (action == "work_generate" && config.dpow.enabled && using_dpow) {
+            // Send to the dpow server and return the same request
+            ++id;
+            const dpow_request = {
+                "user": config.dpow.user,
+                "api_key": config.dpow.api_key,
+                "hash": obj.hash,
+                "id": id
+            };
+
+            let value = {};
+            value.res = res;
+            value.hash = obj.hash;
+            dpow_request_map[id] = value;
+
+            // Send a request to the dpow server
+            dpow_wss.send(JSON.stringify(dpow_request));
+
+        } else if (allowed_actions.includes(action)) {
             // Just forward to RPC server. TODO: Should probably check for validity
             send(data.toString())
                 .then(rpc_response => {
@@ -117,13 +179,7 @@ server.listen(port, hostname, () => {
     console.log(`Server running at http://${hostname}:${port}/`);
 });
 
-
-
-
-
 // Create a reconnecting WebSocket to the node.
-const WS = require('ws');
-const ReconnectingWebSocket = require('reconnecting-websocket');
 const ws = new ReconnectingWebSocket(config.node.ws_address, [], {
     WebSocket: WS,
     connectionTimeout: 1000,
@@ -182,4 +238,4 @@ ws.onopen = () => {
             }
         };
     });
-};
+}

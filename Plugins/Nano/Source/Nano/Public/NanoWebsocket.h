@@ -7,8 +7,8 @@
 #include "WebSocketBase.h"
 #include "NanoWebsocket.generated.h"
 
-UCLASS(BlueprintType, Blueprintable, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class NANO_API UNanoWebsocket : public UActorComponent
+UCLASS(BlueprintType, Blueprintable)
+class NANO_API UNanoWebsocket : public UObject
 {
 	GENERATED_BODY()
 
