@@ -3,6 +3,12 @@ Plugin for integrating Nano micropayments into Unreal Engine 4
 
 **Currently in Beta. Only tested on Windows Desktop (UE 4.22.3 VS 2019), do not use in production.**
 
+Heres a video showing an older version of the test map:  
+https://www.youtube.com/watch?v=xBZE4Em6UmE
+
+Here's a video showing the plugin being used with the ActionRPG sample game:  
+https://www.youtube.com/watch?v=gMtzOkaNnXc
+
 How to use:
 1. Copy `Plugins` folder to an Unreal Engine project root directory
 2. A http server (for RPC requests) & a websocket server (to receive notifications from nano network) are needed. A sample node.js file is supplied (`server.js`) which sets this up. `config.js` is where the server settings go for this. Run `npm install` to instal dependencies.  
