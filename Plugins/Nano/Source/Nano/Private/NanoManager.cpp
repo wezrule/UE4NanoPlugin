@@ -25,7 +25,7 @@
 #define RESPONSE_ARGUMENTS request, response, wasSuccessful
 
 void UNanoManager::SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket) {
-	websocket->Websocket->OnReceiveData.AddDynamic(this, &UNanoManager::OnReceiveMessage); // TODO: Should only call this once, but websocket needs to be initialized
+	websocket->onResponse.AddDynamic (this, &UNanoManager::OnReceiveMessage); // TODO: Should only call this once, but websocket needs to be initialized
 }
 
 void UNanoManager::GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress) {
@@ -176,7 +176,7 @@ void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString 
 	// Keep a mapping of automatic listening delegates
 	auto prvKeyAutomateDelegate = &(keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(pub_key.to_account()), std::forward_as_tuple(private_key, delegate)).first->second);
 
-	// Set it up to check for pending blocks every couple of seconds in case the websocket connection has missed any
+	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
 	GetWorld()->GetTimerManager().SetTimer(prvKeyAutomateDelegate->timerHandle, [this, pub_key, prvKeyAutomateDelegate]() {
 		AutomatePocketPendingUtility(pub_key.to_account().c_str(), prvKeyAutomateDelegate);
 	}, 5.0f, true, 0.f);
@@ -337,7 +337,7 @@ void UNanoManager::OnReceiveMessage(const FString& data) {
 	TSharedRef< TJsonReader<> > JsonReader = TJsonReaderFactory<>::Create(data);
 	TSharedPtr<FJsonObject> response;
 	if (FJsonSerializer::Deserialize(JsonReader, response)) {
-		// Need to determine if it's a)
+		// Need to determine if it's:
 		// 1 - Send from someone else to us (we need to check pending, and fire off a loop to get these blocks (highest amount first), if above a certain amount)
 		// 2 - Send from us to someone else (our balance goes down, check account_info)
 		// 3 - Receive for us (no need to check pending, but need to check balance. But this could be an old block, so need to check account_info balance)
