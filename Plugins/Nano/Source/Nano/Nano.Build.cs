@@ -40,7 +40,7 @@ public class Nano : ModuleRules
                 "Http",
                 "Json",
                 "JsonUtilities",
-                "WebSocket"
+                "WebSockets"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
