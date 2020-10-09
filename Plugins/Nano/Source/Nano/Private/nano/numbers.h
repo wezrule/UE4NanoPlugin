@@ -5,18 +5,21 @@
 #pragma warning (disable : 4668 ) /* '__cplusplus' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif' Caused by Windows SDK bug */
 #endif
 
-#include <boost/multiprecision/cpp_int.hpp>
+#include "Runtime/Core/Public/Math/BigInt.h"
+
+#include <array>
+#include <string>
 
 namespace nano
 {
-using uint128_t = boost::multiprecision::uint128_t;
-using uint256_t = boost::multiprecision::uint256_t;
-using uint512_t = boost::multiprecision::uint512_t;
+using uint128_t = TBigInt<128, false>;
+using uint256_t = TBigInt<256, false>;
+using uint512_t = TBigInt<512, false>;
 // SI dividers
-nano::uint128_t const Gxrb_ratio = nano::uint128_t ("1000000000000000000000000000000000"); // 10^33
-nano::uint128_t const Mxrb_ratio = nano::uint128_t ("1000000000000000000000000000000"); // 10^30
-nano::uint128_t const kxrb_ratio = nano::uint128_t ("1000000000000000000000000000"); // 10^27
-nano::uint128_t const xrb_ratio = nano::uint128_t ("1000000000000000000000000"); // 10^24
+nano::uint128_t const Gxrb_ratio = nano::uint128_t ("314DC6448D9338C15B0A00000000"); // 10^33
+nano::uint128_t const Mxrb_ratio = nano::uint128_t ("C9F2C9CD04674EDEA40000000"); // 10^30
+nano::uint128_t const kxrb_ratio = nano::uint128_t ("33B2E3C9FD0803CE8000000"); // 10^27
+nano::uint128_t const xrb_ratio = nano::uint128_t ("D3C21BCECCEDA1000000"); // 10^24
 nano::uint128_t const raw_ratio = nano::uint128_t ("1"); // 10^0
 
 union uint128_union final
@@ -38,9 +41,6 @@ public:
 	bool decode_hex (std::string const &);
 	void encode_dec (std::string &) const;
 	bool decode_dec (std::string const &, bool = false);
-	bool decode_dec (std::string const &, nano::uint128_t);
-	std::string format_balance (nano::uint128_t scale, int precision, bool group_digits);
-	std::string format_balance (nano::uint128_t scale, int precision, bool group_digits, const std::locale & locale);
 	nano::uint128_t number () const;
 	void clear ();
 	bool is_zero () const;
@@ -135,6 +135,7 @@ std::string to_string_hex (uint64_t const);
 bool from_string_hex (std::string const &, uint64_t &);
 }
 
+/*
 namespace std
 {
 template <>
@@ -150,7 +151,7 @@ struct hash<::nano::uint256_t>
 {
 	size_t operator() (::nano::uint256_t const & number_a) const
 	{
-		return number_a.convert_to<size_t> ();
+		return number_a..convert_to<size_t> ();
 	}
 };
 template <>
@@ -161,4 +162,4 @@ struct hash<::nano::uint512_union>
 		return *reinterpret_cast<size_t const *> (data_a.bytes.data ());
 	}
 };
-}
+}*/

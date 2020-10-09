@@ -10,7 +10,6 @@ public class Nano : ModuleRules
 
         PublicDefinitions.Add("ED25519_CUSTOMRNG");
         PublicDefinitions.Add("ED25519_CUSTOMHASH");
-        PublicDefinitions.Add("BOOST_DISABLE_ABI_HEADERS");
 
         bEnableExceptions = true;
 

@@ -7,6 +7,9 @@
 #include <nano/blocks.h>
 #include <nano/numbers.h>
 #include "NanoBlueprintLibrary.h"
+#include <baseconverter/base_converter.hpp>
+
+#include <cassert>
 
 #include <ed25519-donna/ed25519.h>
 
@@ -248,7 +251,9 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 
 			FBlock block;
 			block.account = account.to_account().c_str();
-			block.balance = new_balance.str().c_str();
+			auto str = new_balance.ToString();
+			str.RemoveFromStart(TEXT("0x"));
+			block.balance = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
 			block.link = pendingBlock.hash; // source hash
 
 			// Need to check if this is the open block
@@ -265,8 +270,8 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 			// Form the output data
 			FAutomateResponseData automateData;
 			automateData.isSend = false;
-			automateData.amount = amount.number().str().c_str();
-			automateData.balance = block.balance;
+			automateData.amount = amount.number().ToString();
+			automateData.balance =  block.balance;
 			automateData.account = block.account;
 			automateData.representative= block.representative;
 
@@ -420,7 +425,11 @@ void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const
 
 					FBlock block;
 					block.account = this_account_public_key.to_account().c_str();
-					block.balance = (bal.number() - amo.number()).str().c_str();
+
+					auto str = (bal.number() - amo.number()).ToString();
+					str.RemoveFromStart(TEXT("0x"));
+					block.balance = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
+
 					block.link = acc.to_string().c_str();
 					block.previous = sendArgs.frontier;
 					block.private_key = sendArgs.private_key;
@@ -469,9 +478,10 @@ FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(RESPON
 			// Account could not be found, fill in with default values
 			nano::public_key public_key;
 			public_key.decode_account (TCHAR_TO_UTF8(*reqRespJson.request->GetStringField("account")));
-
 			accountFrontierResponseData.account = reqRespJson.request->GetStringField("account");
 			accountFrontierResponseData.hash = public_key.to_string().c_str();
+
+			UE_LOG(LogTemp, Warning, TEXT("HASH: %s"), *accountFrontierResponseData.hash);
 			accountFrontierResponseData.balance = "0";
 			accountFrontierResponseData.representative = defaultRepresentative;
 		}
