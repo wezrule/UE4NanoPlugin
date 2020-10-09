@@ -1,16 +1,15 @@
-//#include <nano/lib/utility.hpp>
-
-//#include <nano/crypto_lib/random_pool.hpp>
 #include <nano/numbers.h>
 
+#include <baseconverter/base_converter.hpp>
 #include <ed25519-donna/ed25519.h>
 #ifdef _WIN32
-#pragma warning (disable : 4804 ) /* '/': unsafe use of type 'bool' in operation warnings */
+#pragma warning(disable : 4804) /* '/': unsafe use of type 'bool' in operation warnings */
 #endif
-#include <blake2/blake2.h>
+#include <cassert>
+#include <iomanip>
+#include <sstream>
 
-//#include <crypto/cryptopp/aes.h>
-//#include <crypto/cryptopp/modes.h>
+#include <blake2/blake2.h>
 
 namespace
 {
@@ -51,12 +50,13 @@ void nano::uint256_union::encode_account (std::string & destination_a) const
 	blake2b_init (&hash, 5);
 	blake2b_update (&hash, bytes.data (), bytes.size ());
 	blake2b_final (&hash, reinterpret_cast<uint8_t *> (&check1), 5);
-	nano::uint512_t number_l (number ());
+	nano::uint512_t number_l;
+	number_l.Parse (number ().ToString ());
 	number_l <<= 40;
 	number_l |= nano::uint512_t (check1);
 	for (auto i (0); i < 60; ++i)
 	{
-		uint8_t r (number_l & static_cast<uint8_t> (0x1f));
+		uint8_t r ((number_l & static_cast<uint8_t> (0x1f)).ToInt ());
 		number_l >>= 5;
 		destination_a.push_back (account_encode (r));
 	}
@@ -104,8 +104,18 @@ bool nano::uint256_union::decode_account (std::string const & source_a)
 					}
 					if (!error)
 					{
-						*this = (number_l >> 40).convert_to<nano::uint256_t> ();
-						uint64_t check1 (number_l & static_cast<uint64_t> (0xffffffffff));
+						FString str = (number_l >> 40).ToString ();
+						str.RemoveFromStart ("0x");
+
+						//TCHAR_TO_UTF8(*().ToString()); // Removing 0 at the front (except 0x)
+
+						UE_LOG (LogTemp, Warning, TEXT ("STRING: %s"), *str);
+
+						*this = std::string (TCHAR_TO_UTF8 (*str));
+
+						UE_LOG (LogTemp, Warning, TEXT ("SHOULD_MATCH_STRING: %s"), *number ().ToString ());
+
+						uint64_t check1 ((number_l & static_cast<uint64_t> (0xffffffffff)).ToInt ());
 						uint64_t validation (0);
 						blake2b_state hash;
 						blake2b_init (&hash, 5);
@@ -130,8 +140,12 @@ bool nano::uint256_union::decode_account (std::string const & source_a)
 
 nano::uint256_union::uint256_union (nano::uint256_t const & number_a)
 {
-	bytes.fill (0);
-	boost::multiprecision::export_bits (number_a, bytes.rbegin (), 8, false);
+	nano::uint256_t number_l (number_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
+	{
+		*i = static_cast<uint8_t> ((number_l & static_cast<uint8_t> (0xff)).ToInt ());
+		number_l >>= 8;
+	}
 }
 
 bool nano::uint256_union::operator== (nano::uint256_union const & other_a) const
@@ -200,17 +214,23 @@ void nano::uint256_union::clear ()
 nano::uint256_t nano::uint256_union::number () const
 {
 	nano::uint256_t result;
-	boost::multiprecision::import_bits (result, bytes.begin (), bytes.end ());
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
+	{
+		result <<= shift;
+		result |= *i;
+		shift = 8;
+	}
 	return result;
 }
 
 void nano::uint256_union::encode_hex (std::string & text) const
 {
 	assert (text.empty ());
-	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw (64) << std::setfill ('0');
-	stream << number ();
-	text = stream.str ();
+	auto temp = number ().ToString ();
+	temp.RemoveFromStart (TEXT ("0x"));
+
+	text = std::string (TCHAR_TO_UTF8 (*temp)); // stream.str();
 }
 
 bool nano::uint256_union::decode_hex (std::string const & text)
@@ -218,17 +238,11 @@ bool nano::uint256_union::decode_hex (std::string const & text)
 	auto error (false);
 	if (!text.empty () && text.size () <= 64)
 	{
-		std::stringstream stream (text);
-		stream << std::hex << std::noshowbase;
 		nano::uint256_t number_l;
 		try
 		{
-			stream >> number_l;
+			number_l.Parse (FString (text.c_str ()));
 			*this = number_l;
-			if (!stream.eof ())
-			{
-				error = true;
-			}
 		}
 		catch (std::runtime_error &)
 		{
@@ -245,10 +259,15 @@ bool nano::uint256_union::decode_hex (std::string const & text)
 void nano::uint256_union::encode_dec (std::string & text) const
 {
 	assert (text.empty ());
-	std::stringstream stream;
-	stream << std::dec << std::noshowbase;
-	stream << number ();
-	text = stream.str ();
+//	std::stringstream stream;
+	//stream << std::dec << std::noshowbase;
+//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
+	//text = stream.str ();
+
+	auto temp = number ().ToString ();
+	temp.RemoveFromStart (TEXT ("0x"));
+	text = BaseConverter::HexToDecimalConverter ().Convert (std::string (TCHAR_TO_UTF8 (*temp.ToUpper ())));
+//	number_l.Parse (FString (text)));
 }
 
 bool nano::uint256_union::decode_dec (std::string const & text)
@@ -256,17 +275,13 @@ bool nano::uint256_union::decode_dec (std::string const & text)
 	auto error (text.size () > 78 || (text.size () > 1 && text.front () == '0') || (!text.empty () && text.front () == '-'));
 	if (!error)
 	{
-		std::stringstream stream (text);
-		stream << std::dec << std::noshowbase;
+		//std::stringstream stream(text);
+		//stream << std::dec << std::noshowbase;
 		nano::uint256_t number_l;
 		try
 		{
-			stream >> number_l;
+			number_l.Parse (FString (BaseConverter::DecimalToHexConverter ().Convert (text).c_str ()));
 			*this = number_l;
-			if (!stream.eof ())
-			{
-				error = true;
-			}
 		}
 		catch (std::runtime_error &)
 		{
@@ -299,8 +314,12 @@ nano::uint512_union::uint512_union (nano::uint256_union const & upper, nano::uin
 
 nano::uint512_union::uint512_union (nano::uint512_t const & number_a)
 {
-	bytes.fill (0);
-	boost::multiprecision::export_bits (number_a, bytes.rbegin (), 8, false);
+	nano::uint512_t number_l (number_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
+	{
+		*i = static_cast<uint8_t> ((number_l & static_cast<uint8_t> (0xff)).ToInt ());
+		number_l >>= 8;
+	}
 }
 
 bool nano::uint512_union::is_zero () const
@@ -317,17 +336,24 @@ void nano::uint512_union::clear ()
 nano::uint512_t nano::uint512_union::number () const
 {
 	nano::uint512_t result;
-	boost::multiprecision::import_bits (result, bytes.begin (), bytes.end ());
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
+	{
+		result <<= shift;
+		result |= *i;
+		shift = 8;
+	}
 	return result;
 }
 
 void nano::uint512_union::encode_hex (std::string & text) const
 {
 	assert (text.empty ());
-	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw (128) << std::setfill ('0');
-	stream << number ();
-	text = stream.str ();
+
+	auto temp = number ().ToString ();
+	temp.RemoveFromStart (TEXT ("0x"));
+
+	text = std::string (TCHAR_TO_UTF8 (*temp)); // stream.str();
 }
 
 bool nano::uint512_union::decode_hex (std::string const & text)
@@ -335,17 +361,11 @@ bool nano::uint512_union::decode_hex (std::string const & text)
 	auto error (text.size () > 128);
 	if (!error)
 	{
-		std::stringstream stream (text);
-		stream << std::hex << std::noshowbase;
 		nano::uint512_t number_l;
 		try
 		{
-			stream >> number_l;
+			number_l.Parse (FString (text.c_str ()));
 			*this = number_l;
-			if (!stream.eof ())
-			{
-				error = true;
-			}
 		}
 		catch (std::runtime_error &)
 		{
@@ -447,8 +467,12 @@ nano::uint128_union::uint128_union (uint64_t value_a)
 
 nano::uint128_union::uint128_union (nano::uint128_t const & number_a)
 {
-	bytes.fill (0);
-	boost::multiprecision::export_bits (number_a, bytes.rbegin (), 8, false);
+	nano::uint128_t number_l (number_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
+	{
+		*i = static_cast<uint8_t> ((number_l & static_cast<uint8_t> (0xff)).ToInt ());
+		number_l >>= 8;
+	}
 }
 
 bool nano::uint128_union::operator== (nano::uint128_union const & other_a) const
@@ -474,17 +498,28 @@ bool nano::uint128_union::operator> (nano::uint128_union const & other_a) const
 nano::uint128_t nano::uint128_union::number () const
 {
 	nano::uint128_t result;
-	boost::multiprecision::import_bits (result, bytes.begin (), bytes.end ());
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
+	{
+		result <<= shift;
+		result |= *i;
+		shift = 8;
+	}
 	return result;
 }
 
 void nano::uint128_union::encode_hex (std::string & text) const
 {
 	assert (text.empty ());
-	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw (32) << std::setfill ('0');
-	stream << number ();
-	text = stream.str ();
+//	std::stringstream stream;
+//	stream << std::hex << std::noshowbase << std::setw (32) << std::setfill ('0');
+//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
+
+	auto temp = number ().ToString ();
+	temp.RemoveFromStart (TEXT ("0x"));
+
+	text = std::string (TCHAR_TO_UTF8 (*temp)); 
+//	text = stream.str ();
 }
 
 bool nano::uint128_union::decode_hex (std::string const & text)
@@ -492,17 +527,11 @@ bool nano::uint128_union::decode_hex (std::string const & text)
 	auto error (text.size () > 32);
 	if (!error)
 	{
-		std::stringstream stream (text);
-		stream << std::hex << std::noshowbase;
 		nano::uint128_t number_l;
 		try
 		{
-			stream >> number_l;
+			number_l.Parse (FString (text.c_str ()));
 			*this = number_l;
-			if (!stream.eof ())
-			{
-				error = true;
-			}
 		}
 		catch (std::runtime_error &)
 		{
@@ -515,10 +544,14 @@ bool nano::uint128_union::decode_hex (std::string const & text)
 void nano::uint128_union::encode_dec (std::string & text) const
 {
 	assert (text.empty ());
-	std::stringstream stream;
-	stream << std::dec << std::noshowbase;
-	stream << number ();
-	text = stream.str ();
+	auto temp = number ().ToString ();
+	temp.RemoveFromStart (TEXT ("0x"));
+	text = BaseConverter::HexToDecimalConverter ().Convert (std::string (TCHAR_TO_UTF8 (*temp.ToUpper ())));
+
+//	std::stringstream stream;
+//	stream << std::dec << std::noshowbase;
+//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
+//	text = stream.str ();
 }
 
 bool nano::uint128_union::decode_dec (std::string const & text, bool decimal)
@@ -526,18 +559,11 @@ bool nano::uint128_union::decode_dec (std::string const & text, bool decimal)
 	auto error (text.size () > 39 || (text.size () > 1 && text.front () == '0' && !decimal) || (!text.empty () && text.front () == '-'));
 	if (!error)
 	{
-		std::stringstream stream (text);
-		stream << std::dec << std::noshowbase;
-		boost::multiprecision::checked_uint128_t number_l;
+		nano::uint128_t number_l;
 		try
 		{
-			stream >> number_l;
-			nano::uint128_t unchecked (number_l);
-			*this = unchecked;
-			if (!stream.eof ())
-			{
-				error = true;
-			}
+			number_l.Parse (FString (BaseConverter::DecimalToHexConverter ().Convert (text).c_str ()));
+			*this = number_l;
 		}
 		catch (std::runtime_error &)
 		{
@@ -545,210 +571,6 @@ bool nano::uint128_union::decode_dec (std::string const & text, bool decimal)
 		}
 	}
 	return error;
-}
-
-bool nano::uint128_union::decode_dec (std::string const & text, nano::uint128_t scale)
-{
-	bool error (text.size () > 40 || (!text.empty () && text.front () == '-'));
-	if (!error)
-	{
-		auto delimiter_position (text.find (".")); // Dot delimiter hardcoded until decision for supporting other locales
-		if (delimiter_position == std::string::npos)
-		{
-			nano::uint128_union integer;
-			error = integer.decode_dec (text);
-			if (!error)
-			{
-				// Overflow check
-				try
-				{
-					auto result (boost::multiprecision::checked_uint128_t (integer.number ()) * boost::multiprecision::checked_uint128_t (scale));
-					error = (result > std::numeric_limits<nano::uint128_t>::max ());
-					if (!error)
-					{
-						*this = nano::uint128_t (result);
-					}
-				}
-				catch (std::overflow_error &)
-				{
-					error = true;
-				}
-			}
-		}
-		else
-		{
-			nano::uint128_union integer_part;
-			std::string integer_text (text.substr (0, delimiter_position));
-			error = (integer_text.empty () || integer_part.decode_dec (integer_text));
-			if (!error)
-			{
-				// Overflow check
-				try
-				{
-					error = ((boost::multiprecision::checked_uint128_t (integer_part.number ()) * boost::multiprecision::checked_uint128_t (scale)) > std::numeric_limits<nano::uint128_t>::max ());
-				}
-				catch (std::overflow_error &)
-				{
-					error = true;
-				}
-				if (!error)
-				{
-					nano::uint128_union decimal_part;
-					std::string decimal_text (text.substr (delimiter_position + 1, text.length ()));
-					error = (decimal_text.empty () || decimal_part.decode_dec (decimal_text, true));
-					if (!error)
-					{
-						// Overflow check
-						auto scale_length (scale.convert_to<std::string> ().length ());
-						error = (scale_length <= decimal_text.length ());
-						if (!error)
-						{
-							auto base10 = boost::multiprecision::cpp_int (10);
-							auto pow10 = boost::multiprecision::pow (base10, (scale_length - decimal_text.length () - 1));
-							auto decimal_part_num = decimal_part.number ();
-							auto integer_part_scaled = integer_part.number () * scale;
-							auto decimal_part_mult_pow = decimal_part_num * pow10;
-							auto result = integer_part_scaled + decimal_part_mult_pow;
-
-							// Overflow check
-							error = (result > std::numeric_limits<nano::uint128_t>::max ());
-							if (!error)
-							{
-								*this = nano::uint128_t (result);
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return error;
-}
-
-void format_frac (std::ostringstream & stream, nano::uint128_t value, nano::uint128_t scale, int precision)
-{
-	auto reduce = scale;
-	auto rem = value;
-	while (reduce > 1 && rem > 0 && precision > 0)
-	{
-		reduce /= 10;
-		auto val = rem / reduce;
-		rem -= val * reduce;
-		stream << val;
-		precision--;
-	}
-}
-
-void format_dec (std::ostringstream & stream, nano::uint128_t value, char group_sep, const std::string & groupings)
-{
-	auto largestPow10 = nano::uint256_t (1);
-	int dec_count = 1;
-	while (1)
-	{
-		auto next = largestPow10 * 10;
-		if (next > value)
-		{
-			break;
-		}
-		largestPow10 = next;
-		dec_count++;
-	}
-
-	if (dec_count > 39)
-	{
-		// Impossible.
-		return;
-	}
-
-	// This could be cached per-locale.
-	bool emit_group[39];
-	if (group_sep != 0)
-	{
-		int group_index = 0;
-		int group_count = 0;
-		for (int i = 0; i < dec_count; i++)
-		{
-			group_count++;
-			if (group_count > groupings[group_index])
-			{
-				group_index = std::min (group_index + 1, (int)groupings.length () - 1);
-				group_count = 1;
-				emit_group[i] = true;
-			}
-			else
-			{
-				emit_group[i] = false;
-			}
-		}
-	}
-
-	auto reduce = nano::uint128_t (largestPow10);
-	nano::uint128_t rem = value;
-	while (reduce > 0)
-	{
-		auto val = rem / reduce;
-		rem -= val * reduce;
-		stream << val;
-		dec_count--;
-		if (group_sep != 0 && emit_group[dec_count] && reduce > 1)
-		{
-			stream << group_sep;
-		}
-		reduce /= 10;
-	}
-}
-
-std::string format_balance (nano::uint128_t balance, nano::uint128_t scale, int precision, bool group_digits, char thousands_sep, char decimal_point, std::string & grouping)
-{
-	std::ostringstream stream;
-	auto int_part = balance / scale;
-	auto frac_part = balance % scale;
-	auto prec_scale = scale;
-	for (int i = 0; i < precision; i++)
-	{
-		prec_scale /= 10;
-	}
-	if (int_part == 0 && frac_part > 0 && frac_part / prec_scale == 0)
-	{
-		// Display e.g. "< 0.01" rather than 0.
-		stream << "< ";
-		if (precision > 0)
-		{
-			stream << "0";
-			stream << decimal_point;
-			for (int i = 0; i < precision - 1; i++)
-			{
-				stream << "0";
-			}
-		}
-		stream << "1";
-	}
-	else
-	{
-		format_dec (stream, int_part, group_digits && grouping.length () > 0 ? thousands_sep : 0, grouping);
-		if (precision > 0 && frac_part > 0)
-		{
-			stream << decimal_point;
-			format_frac (stream, frac_part, scale, precision);
-		}
-	}
-	return stream.str ();
-}
-
-std::string nano::uint128_union::format_balance (nano::uint128_t scale, int precision, bool group_digits)
-{
-	auto thousands_sep = std::use_facet<std::numpunct<char>> (std::locale ()).thousands_sep ();
-	auto decimal_point = std::use_facet<std::numpunct<char>> (std::locale ()).decimal_point ();
-	std::string grouping = "\3";
-	return ::format_balance (number (), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
-}
-
-std::string nano::uint128_union::format_balance (nano::uint128_t scale, int precision, bool group_digits, const std::locale & locale)
-{
-	auto thousands_sep = std::use_facet<std::moneypunct<char>> (locale).thousands_sep ();
-	auto decimal_point = std::use_facet<std::moneypunct<char>> (locale).decimal_point ();
-	std::string grouping = std::use_facet<std::moneypunct<char>> (locale).grouping ();
-	return ::format_balance (number (), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
 }
 
 void nano::uint128_union::clear ()
@@ -777,6 +599,7 @@ std::string nano::uint128_union::to_string_dec () const
 
 std::string nano::to_string_hex (uint64_t const value_a)
 {
+	assert (false); // untested
 	std::stringstream stream;
 	stream << std::hex << std::noshowbase << std::setw (16) << std::setfill ('0');
 	stream << value_a;

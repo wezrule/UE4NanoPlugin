@@ -1,5 +1,7 @@
 #include <nano/blocks.h>
 
+#include <cassert>
+
 nano::state_hashables::state_hashables (nano::account const & account_a, nano::block_hash const & previous_a, nano::account const & representative_a, nano::amount const & balance_a, nano::uint256_union const & link_a) :
 account (account_a),
 previous (previous_a),

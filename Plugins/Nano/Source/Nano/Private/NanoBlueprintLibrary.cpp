@@ -4,9 +4,9 @@
 
 #include <Runtime/Core/Public/Misc/AES.h>
 
-#include <sha256/sha256.hpp>
+#include <cassert>
 
-#include <boost/multiprecision/cpp_dec_float.hpp>
+#include <sha256/sha256.hpp>
 
 #ifdef _WIN32
 #pragma warning (disable : 4804 ) /* '/': unsafe use of type 'bool' in operation warnings */
@@ -23,23 +23,57 @@ nano::public_key SeedAccountPubData (const FString& seed, int32 index);
 FAES::FAESKey GenKey (const FString& password);
 }
 
-using cpp_dec_float_30 = boost::multiprecision::number<boost::multiprecision::backends::cpp_dec_float<30>>;
-
 FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 
-	cpp_dec_float_30 cpp_dec (TCHAR_TO_UTF8(*nano));
-	cpp_dec *= cpp_dec_float_30 (nano::Mxrb_ratio);
+	// This can have up to 30 decimal places. Remove leading zeroes
+	auto start_index = 0;
+	auto str = std::string (TCHAR_TO_UTF8(*nano));
+	for (auto i = str.begin (); i < str.end (); ++i, ++start_index)
+	{
+		if (*i == '0')
+		{
+			++start_index;
+		}
+		else
+		{
+			break;
+		}
+	}
 
-	auto str = cpp_dec.convert_to <nano::uint128_t> ().convert_to <std::string> ();
-	return str.c_str ();
+	// Remove leading zeroes
+	auto trimmed_left_zeroes = std::string (str.begin () + start_index, str.end ());
+
+	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
+	auto i = trimmed_left_zeroes.begin ();
+	for (; i < trimmed_left_zeroes.end (); ++i)
+	{
+		if (*i == '.')
+		{
+			i = trimmed_left_zeroes.erase (i);
+			break;
+		}
+	}
+
+	auto num_zeroes_to_add = 30 - std::distance (i, trimmed_left_zeroes.end ());
+	return (trimmed_left_zeroes + std::string (num_zeroes_to_add, '0')).c_str ();
 }
+
+using namespace std::literals;
 
 FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 
-	cpp_dec_float_30 cpp_dec (TCHAR_TO_UTF8(*raw));
-	cpp_dec /= cpp_dec_float_30 (nano::Mxrb_ratio);
+	// Insert a decimal 30 decimal places from the right
+	auto str = std::string (TCHAR_TO_UTF8(*raw));
 
-	auto str = cpp_dec.str (30, std::ios_base::dec | std::ios_base::fixed);
+	if (str.size () <= 30)
+	{
+		str = "0."s + std::string (30 - str.size (), '0');
+	}
+	else
+	{
+		auto decimal_index = str.size () - 30;
+		str.insert (str.begin () + decimal_index, '.');
+	}
 
 	auto index = 0;
 	auto is_decimal = false;
@@ -61,6 +95,10 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 UFUNCTION(BlueprintCallable, Category="Nano")
 FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 
+
+	UE_LOG(LogTemp, Warning, TEXT("raw1: %s"), *raw1);
+	UE_LOG(LogTemp, Warning, TEXT("raw2: %s"), *raw2);
+
 	nano::amount amount1;
 	amount1.decode_dec (TCHAR_TO_UTF8(*raw1));
 
@@ -68,6 +106,7 @@ FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 	amount2.decode_dec (TCHAR_TO_UTF8(*raw2));
 
 	nano::amount total = (amount1.number () + amount2.number ());
+	UE_LOG(LogTemp, Warning, TEXT("Balance123: %s"), *FString (total.to_string_dec ().c_str ()));
 	return total.to_string_dec ().c_str ();
 }
 
@@ -157,6 +196,12 @@ FString UNanoBlueprintLibrary::PublicKeyFromAccount(const FString& account_f) {
 	std::string account_str (TCHAR_TO_UTF8(*account_f));
 	nano::account account;
 	account.decode_account (account_str);
+//	assert (account.to_account () == account_str);
+
+	UE_LOG(LogTemp, Warning, TEXT("acc: %s"), *FString (account.to_account ().c_str ()));
+	UE_LOG(LogTemp, Warning, TEXT("acc1: %s"), *FString (account_str.c_str ()));
+
+	UE_LOG(LogTemp, Warning, TEXT("HASH1: %s"), *FString (account.to_string ().c_str ()));
 	return account.to_string ().c_str ();
 }
 

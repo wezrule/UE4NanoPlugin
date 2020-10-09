@@ -37,8 +37,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
 	void Connect (const FString &url, FWebsocketConnectedDelegate delegate);
 
-//	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
-//	void AddMessageListener (TFunction<void(FString const &)> const & f);
 	UPROPERTY(BlueprintAssignable, Category = WebSocket)
 	FWebsocketMessageResponseDelegate onResponse;
 
