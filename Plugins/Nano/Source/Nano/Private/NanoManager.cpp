@@ -270,7 +270,12 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 			// Form the output data
 			FAutomateResponseData automateData;
 			automateData.isSend = false;
-			automateData.amount = amount.number().ToString();
+
+			str = amount.number().ToString();
+			str.RemoveFromStart(TEXT("0x"));
+			block.balance = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
+
+			automateData.amount = str;
 			automateData.balance =  block.balance;
 			automateData.account = block.account;
 			automateData.representative= block.representative;
@@ -481,7 +486,6 @@ FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(RESPON
 			accountFrontierResponseData.account = reqRespJson.request->GetStringField("account");
 			accountFrontierResponseData.hash = public_key.to_string().c_str();
 
-			UE_LOG(LogTemp, Warning, TEXT("HASH: %s"), *accountFrontierResponseData.hash);
 			accountFrontierResponseData.balance = "0";
 			accountFrontierResponseData.representative = defaultRepresentative;
 		}

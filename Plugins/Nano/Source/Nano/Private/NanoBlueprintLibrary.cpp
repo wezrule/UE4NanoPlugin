@@ -94,11 +94,6 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 
 UFUNCTION(BlueprintCallable, Category="Nano")
 FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
-
-
-	UE_LOG(LogTemp, Warning, TEXT("raw1: %s"), *raw1);
-	UE_LOG(LogTemp, Warning, TEXT("raw2: %s"), *raw2);
-
 	nano::amount amount1;
 	amount1.decode_dec (TCHAR_TO_UTF8(*raw1));
 
@@ -106,7 +101,6 @@ FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 	amount2.decode_dec (TCHAR_TO_UTF8(*raw2));
 
 	nano::amount total = (amount1.number () + amount2.number ());
-	UE_LOG(LogTemp, Warning, TEXT("Balance123: %s"), *FString (total.to_string_dec ().c_str ()));
 	return total.to_string_dec ().c_str ();
 }
 
@@ -196,12 +190,6 @@ FString UNanoBlueprintLibrary::PublicKeyFromAccount(const FString& account_f) {
 	std::string account_str (TCHAR_TO_UTF8(*account_f));
 	nano::account account;
 	account.decode_account (account_str);
-//	assert (account.to_account () == account_str);
-
-	UE_LOG(LogTemp, Warning, TEXT("acc: %s"), *FString (account.to_account ().c_str ()));
-	UE_LOG(LogTemp, Warning, TEXT("acc1: %s"), *FString (account_str.c_str ()));
-
-	UE_LOG(LogTemp, Warning, TEXT("HASH1: %s"), *FString (account.to_string ().c_str ()));
 	return account.to_string ().c_str ();
 }
 

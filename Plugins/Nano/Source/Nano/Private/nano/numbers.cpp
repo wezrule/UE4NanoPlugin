@@ -106,15 +106,7 @@ bool nano::uint256_union::decode_account (std::string const & source_a)
 					{
 						FString str = (number_l >> 40).ToString ();
 						str.RemoveFromStart ("0x");
-
-						//TCHAR_TO_UTF8(*().ToString()); // Removing 0 at the front (except 0x)
-
-						UE_LOG (LogTemp, Warning, TEXT ("STRING: %s"), *str);
-
 						*this = std::string (TCHAR_TO_UTF8 (*str));
-
-						UE_LOG (LogTemp, Warning, TEXT ("SHOULD_MATCH_STRING: %s"), *number ().ToString ());
-
 						uint64_t check1 ((number_l & static_cast<uint64_t> (0xffffffffff)).ToInt ());
 						uint64_t validation (0);
 						blake2b_state hash;

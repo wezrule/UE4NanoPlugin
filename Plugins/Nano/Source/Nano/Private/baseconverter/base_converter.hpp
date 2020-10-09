@@ -1,4 +1,5 @@
 // Arbitrary precision base conversion by Daniel Gehriger <gehriger@linkcad.com>   
+#pragma once
 
 #include <string>
 
