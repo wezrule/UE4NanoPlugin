@@ -25,10 +25,23 @@ FAES::FAESKey GenKey (const FString& password);
 
 FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 
-	// This can have up to 30 decimal places. Remove leading zeroes
-	auto start_index = 0;
+	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
 	auto str = std::string (TCHAR_TO_UTF8(*nano));
-	for (auto i = str.begin (); i < str.end (); ++i, ++start_index)
+	auto i = str.begin ();
+	for (; i < str.end (); ++i)
+	{
+		if (*i == '.')
+		{
+			i = str.erase (i);
+			break;
+		}
+	}
+	auto num_zeroes_to_add = 30 - std::distance (i, str.end ());
+	auto raw = str + std::string (num_zeroes_to_add, '0');
+
+	// Remove leading zeroes
+	auto start_index = 0;
+	for (auto i = str.begin (); i < str.end (); ++i)
 	{
 		if (*i == '0')
 		{
@@ -41,21 +54,7 @@ FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 	}
 
 	// Remove leading zeroes
-	auto trimmed_left_zeroes = std::string (str.begin () + start_index, str.end ());
-
-	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
-	auto i = trimmed_left_zeroes.begin ();
-	for (; i < trimmed_left_zeroes.end (); ++i)
-	{
-		if (*i == '.')
-		{
-			i = trimmed_left_zeroes.erase (i);
-			break;
-		}
-	}
-
-	auto num_zeroes_to_add = 30 - std::distance (i, trimmed_left_zeroes.end ());
-	return (trimmed_left_zeroes + std::string (num_zeroes_to_add, '0')).c_str ();
+	return std::string (raw.begin () + start_index, raw.end ()).c_str ();
 }
 
 using namespace std::literals;
@@ -67,7 +66,7 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 
 	if (str.size () <= 30)
 	{
-		str = "0."s + std::string (30 - str.size (), '0');
+		str = "0."s + std::string (30 - str.size (), '0') + str;
 	}
 	else
 	{
@@ -76,7 +75,6 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 	}
 
 	auto index = 0;
-	auto is_decimal = false;
 	for (auto i = str.rbegin (); i < str.rend (); ++i, ++index)
 	{
 		if (*i != '0')

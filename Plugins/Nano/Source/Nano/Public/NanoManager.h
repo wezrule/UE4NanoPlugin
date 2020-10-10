@@ -29,6 +29,22 @@ public:
 	FTimerHandle timerHandle;
 };
 
+
+class SendDelegate {
+public:
+	SendDelegate() = default;
+	SendDelegate(const FProcessResponseReceivedDelegate& delegate_, const FProcessResponseData& data)
+		: delegate(delegate_),
+	data (data) { }
+
+	SendDelegate(const SendDelegate&) = delete;
+	SendDelegate& operator= (const SendDelegate&) = delete;
+
+	FProcessResponseReceivedDelegate delegate;
+	FProcessResponseData data;
+	FTimerHandle timerHandle;
+};
+
 UCLASS(BlueprintType, Blueprintable)
 class NANO_API UNanoManager : public UObject
 {
@@ -53,9 +69,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Pending(FPendingResponseReceivedDelegate delegate, FString account);
 
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash);
+
 	// Utility functions
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
+
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void SendWaitConfirmation (FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Automate(FAutomateResponseReceivedDelegate delegate, FString const& private_key, UNanoWebsocket* websocket);
@@ -85,9 +107,6 @@ public:
 	TArray<FString> GetSeedFiles() const;
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	TArray<FString> GetSeedFiles1();
-
-	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
@@ -97,10 +116,11 @@ public:
 	int rpcPort;
 
 	UPROPERTY(EditAnywhere, Category = "NanoManager")
-	FString defaultRepresentative { "nano_1thingspmippfngcrtk1ofd3uwftffnu4qu9xkauo9zkiuep6iknzci3jxa6" };
+	FString defaultRepresentative { "nano_1iuz18n4g4wfp9gf7p1s8qkygxw7wx9qfjq6a9aq68uyrdnningdcjontgar" };
 
 private:
-	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap;
+	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap; // TODO: Use FMap, need mutex?, use nano::private_key instead of string
+	std::unordered_map<std::string, SendDelegate> send_block_listener; // TODO: Don't use string..
 
 	struct ReqRespJson {
 		TSharedPtr<FJsonObject> request;
@@ -124,11 +144,17 @@ private:
 
 	void WorkGenerate(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& d);
 
+	void Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate);
+
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account);
 	static FPendingResponseData GetPendingResponseData(RESPONSE_PARAMETERS);
 	static FGetBalanceResponseData GetBalanceResponseData(RESPONSE_PARAMETERS);
 	static FProcessResponseData GetProcessResponseData(RESPONSE_PARAMETERS);
 	static FRequestNanoResponseData GetRequestNanoData(RESPONSE_PARAMETERS);
+
+	void BlockConfirmed(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& d);
+	TSharedPtr<FJsonObject> GetBlockConfirmedJsonObject(FString const& hash);
+	static FBlockConfirmedResponseData GetBlockConfirmedResponseData(RESPONSE_PARAMETERS);
 
 	void Pending(FString account, TFunction<void(RESPONSE_PARAMETERS)> const& d);
 

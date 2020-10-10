@@ -140,6 +140,17 @@ struct NANO_API FPendingResponseData {
 	bool error {false};
 };
 
+USTRUCT(BlueprintType)
+struct NANO_API FBlockConfirmedResponseData {
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
+	bool confirmed{ false };
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
+	bool error { false };
+};
+
 // This is needed for Blueprint by user
 USTRUCT(BlueprintType)
 struct NANO_API FBlock {
@@ -216,10 +227,22 @@ struct NANO_API FProcessRequestData {
 };
 
 USTRUCT(BlueprintType)
-struct NANO_API FProcessResponseData {
+struct NANO_API FBlockConfirmedRequestData {
 	GENERATED_USTRUCT_BODY()
 
-	// TODO: Not bothering to send else from request yet...
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
+	FString action {"block_info"};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
+	bool json_block {true};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
+	FString hash;
+};
+
+USTRUCT(BlueprintType)
+struct NANO_API FProcessResponseData {
+	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Process")
 	FString hash;
@@ -298,6 +321,7 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FProcessResponseReceivedDelegate, FProcessResp
 DECLARE_DYNAMIC_DELEGATE_OneParam(FReceivedNanoDelegate, FRequestNanoResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FAccountFrontierResponseReceivedDelegate, FAccountFrontierResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FPendingResponseReceivedDelegate, FPendingResponseData, data);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FBlockConfirmedResponseReceivedDelegate, FBlockConfirmedResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FAutomateResponseReceivedDelegate, FAutomateResponseData, data);
 
 USTRUCT()
@@ -310,7 +334,8 @@ struct NANO_API FSendArgs {
 	FString balance;
 	FString frontier;
 	FString representative;
-	FProcessResponseReceivedDelegate delegate;
+	TFunction<void(FProcessResponseData)> delegate;
+//	FProcessResponseReceivedDelegate delegate;
 };
 
 inline FString BytesToStringFixed(const uint8 *In, int32 Count)

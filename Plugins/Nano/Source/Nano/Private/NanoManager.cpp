@@ -79,6 +79,12 @@ TSharedPtr<FJsonObject> UNanoManager::GetAccountFrontierJsonObject(FString const
 	return FJsonObjectConverter::UStructToJsonObject(accountFrontierRequestData);
 }
 
+TSharedPtr<FJsonObject> UNanoManager::GetBlockConfirmedJsonObject(FString const& hash) {
+	FBlockConfirmedRequestData blockConfirmedRequestData;
+	blockConfirmedRequestData.hash = hash;
+	return FJsonObjectConverter::UStructToJsonObject(blockConfirmedRequestData);
+}
+
 void UNanoManager::AccountFrontier(FAccountFrontierResponseReceivedDelegate delegate, FString account) {
 	AccountFrontier(account, [this, delegate](RESPONSE_PARAMETERS) {
 		delegate.ExecuteIfBound(GetAccountFrontierResponseData(request, response, wasSuccessful));
@@ -172,7 +178,7 @@ void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString 
 	auto pub_key = nano::pub_key(prv_key.data);
 
 	// Check you haven't already added it
-	assert (keyDelegateMap.find (pub_key.to_account()) == keyDelegateMap.cend ());
+	check (keyDelegateMap.find (pub_key.to_account()) == keyDelegateMap.cend ());
 
 	websocket->RegisterAccount(pub_key.to_account().c_str());
 
@@ -273,9 +279,7 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 
 			str = amount.number().ToString();
 			str.RemoveFromStart(TEXT("0x"));
-			block.balance = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
-
-			automateData.amount = str;
+			automateData.amount = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
 			automateData.balance =  block.balance;
 			automateData.account = block.account;
 			automateData.representative= block.representative;
@@ -373,6 +377,18 @@ void UNanoManager::OnReceiveMessage(const FString& data) {
 				// This is a send from us to someone else
 				auto account = message_json->GetStringField("account");
 				GetFrontierAndFire(message_json, account, &prvKeyAutomateDelegate_sender->second, true);
+
+				auto hash = message_json->GetStringField("hash");
+				auto hash_str = std::string (TCHAR_TO_UTF8 (*hash));
+				// TODO: Should be under critical section (same with timer)
+				auto it = send_block_listener.find (hash_str);
+				if (it != send_block_listener.cend ())
+				{
+					// Call delegate now that the send has been confirmed
+					it->second.delegate.ExecuteIfBound (it->second.data);
+					send_block_listener.erase (it);
+					GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
+				}
 			}
 		}
 		else if (response->GetStringField("subtype") == "receive") {
@@ -386,8 +402,66 @@ void UNanoManager::OnReceiveMessage(const FString& data) {
 	}
 }
 
-// Utility
-void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
+void UNanoManager::BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash) {
+	BlockConfirmed(hash, [this, delegate](RESPONSE_PARAMETERS) {
+		delegate.ExecuteIfBound(GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS));
+	});
+}
+
+void UNanoManager::BlockConfirmed(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& delegate) {
+	MakeRequest(GetBlockConfirmedJsonObject(hash), delegate);
+}
+
+// This will only call the delegate after the send has been confirmed by the network. Requires a websocket connection
+void UNanoManager::SendWaitConfirmation (FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
+
+	// Register a block hash listener which will fire the delegate and remove it
+	Send (private_key, account, amount, [this, private_key, account, amount, delegate](FProcessResponseData process_response_data) {
+		if (!process_response_data.error)
+		{
+			// Register a block listener which will call the user delegate when a confirmation response from the network is received
+			nano::raw_key prv_key;
+			prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+			auto pub_key = nano::pub_key(prv_key.data);
+			pub_key.to_string ();
+
+			// Check we are listening for websocket events for this account
+			check (keyDelegateMap.find (pub_key.to_account()) != keyDelegateMap.cend ());
+			// Also check that we aren't specifically listening for this send block already
+			assert (send_block_listener.find (pub_key.to_account()) == send_block_listener.cend ());
+
+			auto block_hash_str = std::string (TCHAR_TO_UTF8 (*process_response_data.hash));
+
+			// Keep a mapping of automatic listening delegates
+			auto send_delegate = &(send_block_listener.emplace(std::piecewise_construct, std::forward_as_tuple(block_hash_str), std::forward_as_tuple(delegate, process_response_data)).first->second);
+
+			// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+			GetWorld()->GetTimerManager().SetTimer(send_delegate->timerHandle, [this, block_hash_str, send_delegate]() {
+
+				// Get block_info, if confirmed call delegate, remove timer
+				BlockConfirmed(send_delegate->data.hash, [this, send_delegate](RESPONSE_PARAMETERS) {
+					auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
+					if (block_confirmed_data.confirmed)
+					{
+						if (send_block_listener.count (std::string (TCHAR_TO_UTF8 (*send_delegate->data.hash))) > 0)
+						{
+							send_delegate->delegate.ExecuteIfBound (send_delegate->data);
+							send_block_listener.erase (std::string (TCHAR_TO_UTF8 (*send_delegate->data.hash)));
+							GetWorld()->GetTimerManager().ClearTimer(send_delegate->timerHandle);
+						}
+					}
+				});
+			}, 5.0f, true, 5.0f);
+		}
+		else
+		{
+			delegate.ExecuteIfBound (process_response_data);
+		}		
+	});
+}
+
+void UNanoManager::Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate) {
+
 	// Need to construct the block myself
 	nano::raw_key prv_key;
 	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
@@ -443,15 +517,22 @@ void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const
 
 					// Process the process
 					Process(block, [d = sendArgs.delegate](RESPONSE_PARAMETERS){
-						d.ExecuteIfBound(GetProcessResponseData(RESPONSE_ARGUMENTS));
+						d (GetProcessResponseData(RESPONSE_ARGUMENTS));
 					});
 				}
 			});
 		} else {
 			FProcessResponseData processData;
 			processData.error = true;
-			sendArgs.delegate.ExecuteIfBound (processData);
+			sendArgs.delegate (processData);
 		}
+	});
+}
+
+// The will call the delegate when a send has been published, but not necessarily confirmed by the network yet, for ultimate security use SendWaitConfirmation.
+void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
+	Send(private_key, account, amount, [this, delegate](const FProcessResponseData& data) {
+		delegate.ExecuteIfBound(data);
 	});
 }
 
@@ -463,6 +544,14 @@ FRequestNanoResponseData UNanoManager::GetRequestNanoData(RESPONSE_PARAMETERS) {
 	data.amount = reqRespJson.response->GetStringField("amount");
 	data.src_hash = reqRespJson.response->GetStringField("send_hash");
 	data.frontier = reqRespJson.response->GetStringField("frontier");
+	return data;
+}
+
+FBlockConfirmedResponseData UNanoManager::GetBlockConfirmedResponseData(RESPONSE_PARAMETERS) {
+	FBlockConfirmedResponseData data;
+	RETURN_ERROR_IF_INVALID_RESPONSE(data)
+
+	data.confirmed = reqRespJson.response->GetBoolField("confirmed");
 	return data;
 }
 
@@ -656,22 +745,6 @@ void UNanoManager::SetDataSubdirectory(FString const& subdir) {
 
 int32 UNanoManager::GetNumSeedFiles() const {
 	return GetSeedFiles().Num();
-}
-
-TArray<FString> UNanoManager::GetSeedFiles1() {
-	// Loop through all files in data path
-	IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
-
-	TArray<FString> files;
-	platformFile.IterateDirectory(*dataPath, [&files](const TCHAR* fileOrDir, bool isDirectory) {
-		if (!isDirectory) {
-			files.Add(fileOrDir);
-			return true;
-		}
-
-		return false;
-	});
-	return files;
 }
 
 TArray<FString> UNanoManager::GetSeedFiles() const {

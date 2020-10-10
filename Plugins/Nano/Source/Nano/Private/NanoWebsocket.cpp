@@ -45,9 +45,14 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 		delegate.ExecuteIfBound(data);
 	});
 
-	Websocket->OnClosed().AddLambda([](int32 StatusCode, const FString& Reason, bool bWasClean) -> void {
+	Websocket->OnClosed().AddLambda([this](int32 StatusCode, const FString& Reason, bool bWasClean) -> void {
 		// This code will run when the connection to the server has been terminated.
 		// Because of an error or a call to Socket->Close().
+		if (!bWasClean)
+		{
+			// Try to reconnect 
+			Websocket->Connect();
+		}
 	});
 
 	Websocket->OnMessage().AddLambda([this](const FString& MessageString) -> void {
