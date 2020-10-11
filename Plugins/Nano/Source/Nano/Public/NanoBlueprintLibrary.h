@@ -64,8 +64,8 @@ public:
 	static FString SHA256(const FString& string);
 
 	UFUNCTION(BlueprintCallable, Category="Nano")
-	static FString Encrypt(const FString& prvKey, const FString& password);
+	static FString Encrypt(FString prvKey, const FString& password);
 
 	UFUNCTION(BlueprintCallable, Category="Nano")
-	static FString Decrypt(const FString& cipherPrvKey, const FString& password);
+	static FString Decrypt(FString cipherPrvKey, const FString& password);
 };

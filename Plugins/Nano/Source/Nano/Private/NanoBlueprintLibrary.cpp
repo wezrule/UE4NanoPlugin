@@ -20,28 +20,27 @@ namespace
 nano::public_key PrivateKeyToPublicKeyData (const FString& privateKey);
 nano::private_key SeedAccountPrvData (const FString& seed_f, int32 index);
 nano::public_key SeedAccountPubData (const FString& seed, int32 index);
-FAES::FAESKey GenKey (const FString& password);
 }
 
 FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 
 	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
 	auto str = std::string (TCHAR_TO_UTF8(*nano));
-	auto i = str.begin ();
-	for (; i < str.end (); ++i)
+	auto it = str.begin ();
+	for (; it < str.end (); ++it)
 	{
-		if (*i == '.')
+		if (*it == '.')
 		{
-			i = str.erase (i);
+			it = str.erase (it);
 			break;
 		}
 	}
-	auto num_zeroes_to_add = 30 - std::distance (i, str.end ());
+	auto num_zeroes_to_add = 30 - std::distance (it, str.end ());
 	auto raw = str + std::string (num_zeroes_to_add, '0');
 
 	// Remove leading zeroes
 	auto start_index = 0;
-	for (auto i = str.begin (); i < str.end (); ++i)
+	for (auto i = raw.begin (); i < raw.end (); ++i)
 	{
 		if (*i == '0')
 		{
@@ -202,33 +201,91 @@ FString UNanoBlueprintLibrary::SHA256(const FString& string) {
 	return sha256(TCHAR_TO_UTF8(*string)).c_str();
 }
 
+// Taken from https://kelheor.space/2018/11/12/how-to-encrypt-data-with-aes-256-in-ue4/
 UFUNCTION(BlueprintCallable, Category="Nano")
-FString UNanoBlueprintLibrary::Encrypt(const FString& plainSeed, const FString& password) {
+FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& password) {
 	check (plainSeed.Len () == 64);
+	auto key = SHA256 (password);
 
-	constexpr auto size = 32;
-	uint8 blob[size];
-	FString::ToHexBlob(plainSeed, blob, size);
+	// Check inputs
+	if (plainSeed.IsEmpty()) return "";  //empty string? do nothing
+	if (key.IsEmpty()) return "";
 
-	FAES::EncryptData(blob, size, GenKey (password));
+	// To split correctly final result of decryption from trash symbols
+	FString SplitSymbol = "EL@$@!";
+	plainSeed.Append(SplitSymbol);
 
-	return FString::FromHexBlob (blob, size); //now generate hex string of encrypted data
+	// We need at least 32 symbols key
+	key = FMD5::HashAnsiString(*key);
+	TCHAR *KeyTChar = key.GetCharArray().GetData();           
+	ANSICHAR *KeyAnsi = (ANSICHAR*)TCHAR_TO_ANSI(KeyTChar);
+
+	// Calculate blob size and create blob
+	uint8* Blob; 
+	uint32 Size; 
+	 
+	Size = plainSeed.Len();
+	Size = Size + (FAES::AESBlockSize - (Size % FAES::AESBlockSize));
+
+	Blob = new uint8[Size];
+
+	// Convert string to bytes and encrypt
+	if(StringToBytes(plainSeed, Blob, Size)) {
+
+		FAES::EncryptData(Blob, Size, KeyAnsi);
+		plainSeed = FString::FromHexBlob(Blob, Size);
+
+		delete Blob;
+		return plainSeed;		
+	}
+
+	delete Blob;
+	return ""; 
+
 }
 
 UFUNCTION(BlueprintCallable, Category="Nano")
-FString UNanoBlueprintLibrary::Decrypt(const FString& cipherSeed, const FString& password) {
-	constexpr auto size = 32;
-	uint8 blob[size];
-	check (cipherSeed.Len () == 64);
+FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& password) {
+	// Check inputs
+	if (cipherSeed.IsEmpty()) return ""; 
+	auto key = SHA256 (password);
+	if (key.IsEmpty()) return "";
 
-	FAES::DecryptData(blob, size, GenKey (password));
-	auto plain_text = FString::FromHexBlob (blob,size);
-	if (plain_text != "")
-	{
-		check (plain_text.Len () == 64);
+	// To split correctly final result of decryption from trash symbols
+	FString SplitSymbol = "EL@$@!";
+
+	// We need at least 32 symbols key
+	key = FMD5::HashAnsiString(*key);
+	TCHAR *KeyTChar = key.GetCharArray().GetData();
+	ANSICHAR *KeyAnsi = (ANSICHAR*)TCHAR_TO_ANSI(KeyTChar);
+	
+	// Calculate blob size and create blob
+	uint8* Blob; 
+	uint32 Size; 
+
+	Size = cipherSeed.Len();
+	Size = Size + (FAES::AESBlockSize - (Size % FAES::AESBlockSize));
+
+	Blob = new uint8[Size]; 
+
+	// Convert string to bytes and decrypt
+	if (FString::ToHexBlob(cipherSeed, Blob, Size)) {
+
+		FAES::DecryptData(Blob, Size, KeyAnsi);		
+		cipherSeed = BytesToString(Blob, Size);
+
+		// Split required data from trash
+		FString LeftData;	
+		FString RightData;	
+		cipherSeed.Split(SplitSymbol, &LeftData, &RightData, ESearchCase::CaseSensitive, ESearchDir::FromStart);
+		cipherSeed = LeftData;
+
+		delete Blob; 
+		return cipherSeed; 
 	}
 
-	return plain_text;
+	delete Blob; 
+	return ""; 
 }
 
 namespace
@@ -253,14 +310,5 @@ nano::public_key SeedAccountPubData (const FString& seed, int32 index) {
 	nano::public_key public_key;
 	ed25519_publickey (private_key.bytes.data (), public_key.bytes.data ());
 	return public_key;
-}
-
-FAES::FAESKey GenKey (const FString& password) {
-	uint8 blob[32];
-	FString::ToBlob(sha256(TCHAR_TO_UTF8(*password)).c_str (), blob, 32);
-
-	FAES::FAESKey key;
-	std::copy (std::begin (blob), std::end (blob), std::begin (key.Key));
-	return key;
 }
 }

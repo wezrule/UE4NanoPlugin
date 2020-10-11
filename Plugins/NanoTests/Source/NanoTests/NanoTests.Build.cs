@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class Nano : ModuleRules
+public class NanoTests : ModuleRules
 {
-	public Nano(ReadOnlyTargetRules Target) : base(Target)
+	public NanoTests(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
@@ -37,7 +37,8 @@ public class Nano : ModuleRules
                 "Http",
                 "Json",
                 "JsonUtilities",
-                "WebSockets"
+                "WebSockets",
+				"Nano"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
