@@ -2,14 +2,13 @@
 #include "Engine.h"
 #include "Runtime/Online/HTTP/Public/HttpModule.h"
 #include "Runtime/Online/HTTP/Public/Http.h"
+
 #include "Json.h"
 #include "JsonObjectConverter.h"
 #include <nano/blocks.h>
 #include <nano/numbers.h>
 #include "NanoBlueprintLibrary.h"
 #include <baseconverter/base_converter.hpp>
-
-#include <cassert>
 
 #include <ed25519-donna/ed25519.h>
 
@@ -157,7 +156,7 @@ void UNanoManager::RequestNano(FReceivedNanoDelegate delegate, FString nanoAddre
 void UNanoManager::Watch(FAutomateResponseReceivedDelegate delegate, FString const& account, UNanoWebsocket* websocket) {
 
 	// Check you haven't already added it
-	assert (keyDelegateMap.find (TCHAR_TO_UTF8(*account)) == keyDelegateMap.cend ());
+	check (keyDelegateMap.find (TCHAR_TO_UTF8(*account)) == keyDelegateMap.cend ());
 
 	websocket->RegisterAccount(account);
 
@@ -171,13 +170,14 @@ void UNanoManager::Unwatch(const FString& account, UNanoWebsocket* websocket) {
 }
 
 void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString const& private_key, UNanoWebsocket* websocket) {
-	assert (!private_key.IsEmpty ());
+	check (!private_key.IsEmpty ());
 	nano::raw_key prv_key;
 	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
 
 	auto pub_key = nano::pub_key(prv_key.data);
 
 	// Check you haven't already added it
+	FScopeLock lk (&keyDelegateMutex);
 	check (keyDelegateMap.find (pub_key.to_account()) == keyDelegateMap.cend ());
 
 	websocket->RegisterAccount(pub_key.to_account().c_str());
@@ -186,20 +186,29 @@ void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString 
 	auto prvKeyAutomateDelegate = &(keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(pub_key.to_account()), std::forward_as_tuple(private_key, delegate)).first->second);
 
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-	GetWorld()->GetTimerManager().SetTimer(prvKeyAutomateDelegate->timerHandle, [this, pub_key, prvKeyAutomateDelegate]() {
-		AutomatePocketPendingUtility(pub_key.to_account().c_str(), prvKeyAutomateDelegate);
-	}, 5.0f, true, 0.f);
+	GetWorld()->GetTimerManager().SetTimer(prvKeyAutomateDelegate->timerHandle, [this, pub_key]() {
+
+		FScopeLock lk (&keyDelegateMutex);
+		auto it = keyDelegateMap.find (pub_key.to_account());
+		if (it != keyDelegateMap.end ())
+		{
+			AutomatePocketPendingUtility(pub_key.to_account().c_str());
+		}
+	}, 5.0f, true, 1.f);
 }
 
 void UNanoManager::AutomateUnregister(const FString& account, UNanoWebsocket* websocket) {
 	websocket->UnregisterAccount(account);
 
 	// Remove timer (has to be the exact one, doesn't work if it's been copied.
-	auto & prvKeyAutomateDelegate = keyDelegateMap[TCHAR_TO_UTF8(*account)];
-	if (!prvKeyAutomateDelegate.prv_key.IsEmpty ()) {
-		GetWorld()->GetTimerManager().ClearTimer(prvKeyAutomateDelegate.timerHandle);
+	FScopeLock lk (&keyDelegateMutex);
+	auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+	if (it != keyDelegateMap.cend ()) {
+		if (!it->second.prv_key.IsEmpty ()) {
+			GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
+		}
+		keyDelegateMap.erase(it);
 	}
-	keyDelegateMap.erase(TCHAR_TO_UTF8(*account));
 }
 
 namespace
@@ -211,31 +220,40 @@ namespace
 	}
 }
 
-void UNanoManager::AutomatePocketPendingUtility(const FString& account, const PrvKeyAutomateDelegate* prvKeyAutomateDelegate_receiver) {
-	AccountFrontier(account, [this, account, prvKeyAutomateDelegate_receiver](RESPONSE_PARAMETERS) {
+void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
+	AccountFrontier(account, [this, account](RESPONSE_PARAMETERS) {
 
 		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
 		if (!frontierData.error) {
-			Pending(account, [this, frontierData, prvKeyAutomateDelegate_receiver](RESPONSE_PARAMETERS) {
+			Pending(account, [this, frontierData, account](RESPONSE_PARAMETERS) {
 				auto pendingData = GetPendingResponseData(RESPONSE_ARGUMENTS);
 				if (!pendingData.error) {
 					if (pendingData.blocks.Num() > 0) {
-						AutomateWorkGenerateLoop(frontierData, prvKeyAutomateDelegate_receiver, pendingData.blocks);
+						AutomateWorkGenerateLoop(frontierData, pendingData.blocks);
 					}
-				}else {
-					fireAutomateDelegateError(prvKeyAutomateDelegate_receiver);
+				} else {
+					FScopeLock lk (&keyDelegateMutex);
+					auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+					if (it != keyDelegateMap.end ())
+					{
+						fireAutomateDelegateError(&it->second);
+					}
 				}
-
 			});
 		} else {
-			fireAutomateDelegateError(prvKeyAutomateDelegate_receiver);
+			FScopeLock lk (&keyDelegateMutex);
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+			if (it != keyDelegateMap.end ())
+			{
+				fireAutomateDelegateError(&it->second);
+			}
 		}
 	});
 }
 
-void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, const PrvKeyAutomateDelegate* prvKeyAutomateDelegate_receiver, TArray<FPendingBlock> pendingBlocks) {
+void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks) {
 
-	WorkGenerate(frontierData.hash, [this, frontierData, prvKeyAutomateDelegate_receiver, pendingBlocks](RESPONSE_PARAMETERS) mutable {
+	WorkGenerate(frontierData.hash, [this, frontierData, pendingBlocks](RESPONSE_PARAMETERS) mutable {
 		auto workData = GetWorkGenerateResponseData(RESPONSE_ARGUMENTS);
 		// prvKeyAutomateDelegate_receiver could be deleted, this is just a pointer
 		if (!workData.error && pendingBlocks.Num() != 0) {
@@ -269,78 +287,104 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 				block.previous = frontierData.hash;
 			}
 
-			block.private_key = prvKeyAutomateDelegate_receiver->prv_key;
-			block.representative = TCHAR_TO_UTF8(*frontierData.representative);
-			block.work = workData.work;
+			FScopeLock lk (&keyDelegateMutex);
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
+			if (it != keyDelegateMap.end ())
+			{
+				block.private_key = it->second.prv_key;
+				block.representative = TCHAR_TO_UTF8(*frontierData.representative);
+				block.work = workData.work;
 
-			// Form the output data
-			FAutomateResponseData automateData;
-			automateData.isSend = false;
+				// Form the output data
+				FAutomateResponseData automateData;
+				automateData.isSend = false;
 
-			str = amount.number().ToString();
-			str.RemoveFromStart(TEXT("0x"));
-			automateData.amount = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
-			automateData.balance =  block.balance;
-			automateData.account = block.account;
-			automateData.representative= block.representative;
+				str = amount.number().ToString();
+				str.RemoveFromStart(TEXT("0x"));
+				automateData.amount = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
+				automateData.balance =  block.balance;
+				automateData.account = block.account;
+				automateData.representative= block.representative;
 
-			Process(block, [this, prvKeyAutomateDelegate_receiver, pendingBlocks, automateData](RESPONSE_PARAMETERS) mutable {
-				auto processData = GetProcessResponseData(RESPONSE_ARGUMENTS);
-				if (!processData.error) {
-					automateData.frontier = processData.hash;
-					automateData.hash = processData.hash;
+				Process(block, [this, pendingBlocks, automateData](RESPONSE_PARAMETERS) mutable {
+					auto processData = GetProcessResponseData(RESPONSE_ARGUMENTS);
+					if (!processData.error) {
+						automateData.frontier = processData.hash;
+						automateData.hash = processData.hash;
 
-					// Fire it back to the user
-					prvKeyAutomateDelegate_receiver->delegate.ExecuteIfBound(automateData);
+						FScopeLock lk (&keyDelegateMutex);
+						auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*automateData.account));
+						if (it != keyDelegateMap.end ())
+						{
+							// Fire it back to the user
+							it->second.delegate.ExecuteIfBound(automateData);
 
-					// If there are any more pending, then redo this process
-					if (pendingBlocks.Num() > 0) {
-						FAccountFrontierResponseData accountFrontierData;
+							// If there are any more pending, then redo this process
+							if (pendingBlocks.Num() > 0) {
+								FAccountFrontierResponseData accountFrontierData;
 
-						accountFrontierData.account = automateData.account;
-						accountFrontierData.balance = automateData.balance;
-						accountFrontierData.hash = automateData.frontier;
-						accountFrontierData.representative = automateData.representative;
+								accountFrontierData.account = automateData.account;
+								accountFrontierData.balance = automateData.balance;
+								accountFrontierData.hash = automateData.frontier;
+								accountFrontierData.representative = automateData.representative;
 
-						AutomateWorkGenerateLoop(accountFrontierData, prvKeyAutomateDelegate_receiver, pendingBlocks);
+								lk.Unlock ();
+								AutomateWorkGenerateLoop(accountFrontierData, pendingBlocks);
+							}
+						}
 					}
-				}
-				else {
-					fireAutomateDelegateError(prvKeyAutomateDelegate_receiver);
-				}
-			});
+					else {
+						FScopeLock lk (&keyDelegateMutex);
+						auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*automateData.account));
+						if (it != keyDelegateMap.end ())
+						{
+							fireAutomateDelegateError(&it->second);
+						}
+					}
+				});
+			}
 		}
 		else {
-			fireAutomateDelegateError(prvKeyAutomateDelegate_receiver);
+			FScopeLock lk (&keyDelegateMutex);
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
+			if (it != keyDelegateMap.end ())
+			{
+				fireAutomateDelegateError(&it->second);
+			}
 		}
 	});
 }
 
-void UNanoManager::GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_json, FString const & account, PrvKeyAutomateDelegate const * prvKeyAutomateDelegate, bool isSend)
+void UNanoManager::GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_json, FString const & account, bool isSend)
 {
 	// This is a send from a user we are tracking, so balance needs checking in case it has been subtracted
 	auto amount = message_json->GetStringField("amount");
 	auto hash = message_json->GetStringField("hash");
 
 	// Get the account info and send that back along with the block that has been sent
-	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, prvKeyAutomateDelegate, isSend](RESPONSE_PARAMETERS) {
+	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, isSend](RESPONSE_PARAMETERS) {
 
 		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
-		if (!frontierData.error) {
 
-			// Form the output data
-			FAutomateResponseData automateData;
-			automateData.isSend = isSend;
-			automateData.amount = amount;
-			automateData.balance = frontierData.balance;
-			automateData.account = account;
-			automateData.frontier = frontierData.hash;
-			automateData.hash = hash;
+		FScopeLock lk (&keyDelegateMutex);
+		auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+		if (it != keyDelegateMap.end ()) {
+			if (!frontierData.error) {
 
-			// Fire it back to the user
-			prvKeyAutomateDelegate->delegate.ExecuteIfBound(automateData);
-		} else {
-			fireAutomateDelegateError(prvKeyAutomateDelegate);
+				// Form the output data
+				FAutomateResponseData automateData;
+				automateData.isSend = isSend;
+				automateData.amount = amount;
+				automateData.balance = frontierData.balance;
+				automateData.account = account;
+				automateData.frontier = frontierData.hash;
+				automateData.hash = hash;
+
+				// Fire it back to the user
+				it->second.delegate.ExecuteIfBound(automateData);
+			} else {
+				fireAutomateDelegateError(&it->second);
+			}
 		}
 	});
 }
@@ -360,43 +404,51 @@ void UNanoManager::OnReceiveMessage(const FString& data) {
 		auto message_json = response->GetObjectField("message");
 		auto block_json = message_json->GetObjectField("block");
 		if (block_json->GetStringField("subtype") == "send") {
-			auto prvKeyAutomateDelegate_receiver = keyDelegateMap.find (TCHAR_TO_UTF8(*block_json->GetStringField("link_as_account")));
-			if (prvKeyAutomateDelegate_receiver != keyDelegateMap.end ()) {
-				// This is a send to us from someone else
+
+			{
+				FScopeLock lk (&keyDelegateMutex);
 				auto account = block_json->GetStringField("link_as_account");
-				if (prvKeyAutomateDelegate_receiver->second.prv_key.IsEmpty ()) {
-					// We are just watching this so return now
-					GetFrontierAndFire (message_json, account, &prvKeyAutomateDelegate_receiver->second, false);
-				} else {
-					AutomatePocketPendingUtility(account, &prvKeyAutomateDelegate_receiver->second);
+				auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+				if (it != keyDelegateMap.end ()) {
+					// This is a send to us from someone else
+					if (it->second.prv_key.IsEmpty ()) {
+						// We are just watching this so return now
+						GetFrontierAndFire (message_json, account, false);
+					} else {
+						AutomatePocketPendingUtility(account);
+					}
 				}
 			}
 
-			auto prvKeyAutomateDelegate_sender = keyDelegateMap.find (TCHAR_TO_UTF8(*block_json->GetStringField("account")));
-			if (prvKeyAutomateDelegate_sender != keyDelegateMap.end ()) {
+			FScopeLock lk (&keyDelegateMutex);
+			auto account = block_json->GetStringField("account");
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+			if (it != keyDelegateMap.end ()) {
 				// This is a send from us to someone else
-				auto account = message_json->GetStringField("account");
-				GetFrontierAndFire(message_json, account, &prvKeyAutomateDelegate_sender->second, true);
+				GetFrontierAndFire(message_json, account, true);
+				lk.Unlock ();
 
 				auto hash = message_json->GetStringField("hash");
-				auto hash_str = std::string (TCHAR_TO_UTF8 (*hash));
-				// TODO: Should be under critical section (same with timer)
-				auto it = send_block_listener.find (hash_str);
-				if (it != send_block_listener.cend ())
+				auto hash_std_str = std::string (TCHAR_TO_UTF8 (*hash));
+
+				FScopeLock sendBlockLk (&sendBlockListenerMutex);
+				auto it1 = sendBlockListener.find (hash_std_str);
+				if (it1 != sendBlockListener.cend ())
 				{
 					// Call delegate now that the send has been confirmed
-					it->second.delegate.ExecuteIfBound (it->second.data);
-					send_block_listener.erase (it);
-					GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
+					it1->second.delegate.ExecuteIfBound (it1->second.data);
+					GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
+					sendBlockListener.erase (it1);
 				}
 			}
 		}
 		else if (response->GetStringField("subtype") == "receive") {
-			auto prvKeyAutomateDelegate = keyDelegateMap.find (TCHAR_TO_UTF8(*response->GetStringField("account")));
-			if (prvKeyAutomateDelegate != keyDelegateMap.end ()) {
+
+			FScopeLock lk (&keyDelegateMutex);
+			auto account = message_json->GetStringField("account");
+			if (keyDelegateMap.count (TCHAR_TO_UTF8(*account)) > 0) {
 				// This is a receive to us
-				auto account = message_json->GetStringField("account");
-				GetFrontierAndFire(message_json, account, &prvKeyAutomateDelegate->second, false);
+				GetFrontierAndFire(message_json, account, false);
 			}
 		}
 	}
@@ -428,29 +480,37 @@ void UNanoManager::SendWaitConfirmation (FProcessResponseReceivedDelegate delega
 			// Check we are listening for websocket events for this account
 			check (keyDelegateMap.find (pub_key.to_account()) != keyDelegateMap.cend ());
 			// Also check that we aren't specifically listening for this send block already
-			assert (send_block_listener.find (pub_key.to_account()) == send_block_listener.cend ());
+			FScopeLock lk (&sendBlockListenerMutex);
+			check (sendBlockListener.find (pub_key.to_account()) == sendBlockListener.cend ());
 
-			auto block_hash_str = std::string (TCHAR_TO_UTF8 (*process_response_data.hash));
+			auto blockHashStdStr = std::string (TCHAR_TO_UTF8 (*process_response_data.hash));
 
 			// Keep a mapping of automatic listening delegates
-			auto send_delegate = &(send_block_listener.emplace(std::piecewise_construct, std::forward_as_tuple(block_hash_str), std::forward_as_tuple(delegate, process_response_data)).first->second);
+			auto sendDelegate = &(sendBlockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(delegate, process_response_data)).first->second);
 
 			// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-			GetWorld()->GetTimerManager().SetTimer(send_delegate->timerHandle, [this, block_hash_str, send_delegate]() {
+			GetWorld()->GetTimerManager().SetTimer(sendDelegate->timerHandle, [this, hash = sendDelegate->data.hash]() {
 
-				// Get block_info, if confirmed call delegate, remove timer
-				BlockConfirmed(send_delegate->data.hash, [this, send_delegate](RESPONSE_PARAMETERS) {
-					auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
-					if (block_confirmed_data.confirmed)
-					{
-						if (send_block_listener.count (std::string (TCHAR_TO_UTF8 (*send_delegate->data.hash))) > 0)
+				FScopeLock lk (&sendBlockListenerMutex);
+				auto it = sendBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
+				if (it != sendBlockListener.cend ())
+				{
+					// Get block_info, if confirmed call delegate, remove timer
+					BlockConfirmed(it->second.data.hash, [this, hash = it->second.data.hash](RESPONSE_PARAMETERS) {
+						auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
+						if (block_confirmed_data.confirmed)
 						{
-							send_delegate->delegate.ExecuteIfBound (send_delegate->data);
-							send_block_listener.erase (std::string (TCHAR_TO_UTF8 (*send_delegate->data.hash)));
-							GetWorld()->GetTimerManager().ClearTimer(send_delegate->timerHandle);
+							FScopeLock lk (&sendBlockListenerMutex);
+							auto it = sendBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
+							if (it != sendBlockListener.cend ())
+							{
+								it->second.delegate.ExecuteIfBound (it->second.data);
+								GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
+								sendBlockListener.erase (it);
+							}
 						}
-					}
-				});
+					});
+				}
 			}, 5.0f, true, 5.0f);
 		}
 		else
@@ -717,7 +777,7 @@ FString UNanoManager::getDefaultDataPath() const
 		string += L"\\Nano_Games";
 		result = string.c_str();
 	} else {
-		assert(false);
+		check(false);
 	}
 #elif __APPLE__
 	NSString* dir_string = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
@@ -728,7 +788,7 @@ FString UNanoManager::getDefaultDataPath() const
 	[dir_string release] ;
 #else
 	auto entry(getpwuid(getuid()));
-	assert(entry != nullptr);
+	check(entry != nullptr);
 	std::wstring string(entry->pw_dir);
 	string += "/Nano_Games";
 	result = string.c_str();

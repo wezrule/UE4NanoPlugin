@@ -24,7 +24,7 @@ public:
 	PrvKeyAutomateDelegate(const PrvKeyAutomateDelegate&) = delete;
 	PrvKeyAutomateDelegate& operator= (const PrvKeyAutomateDelegate&) = delete;
 
-	FString prv_key; // If null that means we are just watching it?
+	FString prv_key; // If null that means we are just watching it
 	FAutomateResponseReceivedDelegate delegate;
 	FTimerHandle timerHandle;
 };
@@ -115,8 +115,11 @@ public:
 	FString defaultRepresentative { "nano_1iuz18n4g4wfp9gf7p1s8qkygxw7wx9qfjq6a9aq68uyrdnningdcjontgar" };
 
 private:
-	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap; // TODO: Use FMap, need mutex?, use nano::private_key instead of string
-	std::unordered_map<std::string, SendDelegate> send_block_listener; // TODO: Don't use string..
+	FCriticalSection keyDelegateMutex;
+	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap; // Can't use TMap due to reference invalidation after emplace.
+
+	FCriticalSection sendBlockListenerMutex;
+	std::unordered_map<std::string, SendDelegate> sendBlockListener;
 
 	struct ReqRespJson {
 		TSharedPtr<FJsonObject> request;
@@ -156,10 +159,10 @@ private:
 
 	void Process(FBlock block, TFunction<void(RESPONSE_PARAMETERS)> const& delegate);
 
-	void AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, const PrvKeyAutomateDelegate* prvKeyAutomateDelegate_receiver, TArray<FPendingBlock> pendingBlocks);
-	void AutomatePocketPendingUtility(const FString& account, const PrvKeyAutomateDelegate* prvKeyAutomateDelegate_receiver);
+	void AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks);
+	void AutomatePocketPendingUtility(const FString& account);
 
-	void GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_json, FString const & account, PrvKeyAutomateDelegate const * prvKeyAutomateDelegate, bool isSend);
+	void GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_json, FString const & account, bool isSend);
 
 	UFUNCTION()
 	void OnReceiveMessage(const FString& data);
