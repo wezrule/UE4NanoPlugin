@@ -648,8 +648,6 @@ TSharedRef<IHttpRequest> UNanoManager::CreateHttpRequest(TSharedPtr<FJsonObject>
 	TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&OutputString);
 	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
 
-	auto rpcUrl = rpcAddress;
-	rpcUrl.Append(":").AppendInt(rpcPort);
 	HttpRequest->SetURL(rpcUrl);
 	HttpRequest->SetContentAsString(OutputString);
 	return HttpRequest;

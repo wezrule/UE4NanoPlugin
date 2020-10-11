@@ -29,7 +29,6 @@ public:
 	FTimerHandle timerHandle;
 };
 
-
 class SendDelegate {
 public:
 	SendDelegate() = default;
@@ -110,10 +109,7 @@ public:
 	void SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
-	FString rpcAddress;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
-	int rpcPort;
+	FString rpcUrl;
 
 	UPROPERTY(EditAnywhere, Category = "NanoManager")
 	FString defaultRepresentative { "nano_1iuz18n4g4wfp9gf7p1s8qkygxw7wx9qfjq6a9aq68uyrdnningdcjontgar" };
