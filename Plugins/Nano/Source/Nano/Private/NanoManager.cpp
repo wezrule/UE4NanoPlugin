@@ -213,10 +213,10 @@ void UNanoManager::AutomateUnregister(const FString& account, UNanoWebsocket* we
 
 namespace
 {
-	void fireAutomateDelegateError(const PrvKeyAutomateDelegate* prvKeyAutomateDelegate) {
+	void fireAutomateDelegateError(FAutomateResponseReceivedDelegate delegate) {
 		FAutomateResponseData data;
 		data.error = true;
-		prvKeyAutomateDelegate->delegate.ExecuteIfBound(data);
+		delegate.ExecuteIfBound(data);
 	}
 }
 
@@ -225,7 +225,7 @@ void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
 
 		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
 		if (!frontierData.error) {
-			Pending(account, [this, frontierData, account](RESPONSE_PARAMETERS) {
+			Pending(account, [this, frontierData](RESPONSE_PARAMETERS) {
 				auto pendingData = GetPendingResponseData(RESPONSE_ARGUMENTS);
 				if (!pendingData.error) {
 					if (pendingData.blocks.Num() > 0) {
@@ -233,10 +233,12 @@ void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
 					}
 				} else {
 					FScopeLock lk (&keyDelegateMutex);
-					auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+					auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
 					if (it != keyDelegateMap.end ())
 					{
-						fireAutomateDelegateError(&it->second);
+						FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+						lk.Unlock ();
+						fireAutomateDelegateError(delegate);
 					}
 				}
 			});
@@ -245,7 +247,9 @@ void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
 			if (it != keyDelegateMap.end ())
 			{
-				fireAutomateDelegateError(&it->second);
+				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+				lk.Unlock ();
+				fireAutomateDelegateError(delegate);
 			}
 		}
 	});
@@ -317,7 +321,9 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 						if (it != keyDelegateMap.end ())
 						{
 							// Fire it back to the user
-							it->second.delegate.ExecuteIfBound(automateData);
+							FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+							lk.Unlock ();
+							delegate.ExecuteIfBound(automateData);
 
 							// If there are any more pending, then redo this process
 							if (pendingBlocks.Num() > 0) {
@@ -328,7 +334,6 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 								accountFrontierData.hash = automateData.frontier;
 								accountFrontierData.representative = automateData.representative;
 
-								lk.Unlock ();
 								AutomateWorkGenerateLoop(accountFrontierData, pendingBlocks);
 							}
 						}
@@ -338,7 +343,9 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 						auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*automateData.account));
 						if (it != keyDelegateMap.end ())
 						{
-							fireAutomateDelegateError(&it->second);
+							FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+							lk.Unlock ();
+							fireAutomateDelegateError(delegate);
 						}
 					}
 				});
@@ -349,7 +356,9 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
 			if (it != keyDelegateMap.end ())
 			{
-				fireAutomateDelegateError(&it->second);
+				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+				lk.Unlock ();
+				fireAutomateDelegateError(delegate);
 			}
 		}
 	});
@@ -380,10 +389,14 @@ void UNanoManager::GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_jso
 				automateData.frontier = frontierData.hash;
 				automateData.hash = hash;
 
+				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+				lk.Unlock ();
 				// Fire it back to the user
-				it->second.delegate.ExecuteIfBound(automateData);
+				delegate.ExecuteIfBound(automateData);
 			} else {
-				fireAutomateDelegateError(&it->second);
+				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
+				lk.Unlock ();
+				fireAutomateDelegateError(delegate);
 			}
 		}
 	});
