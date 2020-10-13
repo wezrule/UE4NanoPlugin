@@ -45,4 +45,10 @@ protected:
 
 private:
 	TSharedPtr<IWebSocket> Websocket;
+	FTimerHandle timerHandle;
+
+	FCriticalSection mutex;
+
+	// TODO: Should use nano::account
+	TSet<FString> registeredAccounts;
 };

@@ -6,8 +6,23 @@
 #include "NanoBlueprintLibrary.h"
 #include "NanoTypes.h"
 
+#include "Runtime/Engine/Public/TimerManager.h"
+
 #include "WebSocketsModule.h" // Module definition
 #include "Modules/ModuleManager.h"
+
+namespace
+{
+template<typename T>
+FString MakeOutputString (T const & ustruct)
+{
+	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(ustruct);
+	FString OutputString;
+	TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&OutputString);
+	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
+	return OutputString;
+}
+}
 
 void UNanoWebsocket::BeginDestroy()
 {
@@ -30,7 +45,16 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 	Websocket = FWebSocketsModule::Get().CreateWebSocket(wsURL, TEXT("ws"));
 
 	// Need to call all these before connecting (I think)
-	Websocket->OnConnected().AddLambda([delegate]() -> void {
+	Websocket->OnConnected().AddLambda([delegate, this]() -> void {
+		{
+			FScopeLock lk(&mutex);
+			for (auto const & account : registeredAccounts) {
+				FRegisterAccountRequestData registerAccount;
+				registerAccount.account = account;
+				Websocket->Send(MakeOutputString (registerAccount));
+			}
+		}
+
 		 // This will run once connected.
 		FWebsocketConnectResponseData data;
 		data.error = false;
@@ -60,16 +84,14 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 	});
 
 	Websocket->Connect();
-}
 
-template<typename T>
-FString MakeOutputString (T const & ustruct)
-{
-	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(ustruct);
-	FString OutputString;
-	TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&OutputString);
-	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
-	return OutputString;
+	// Set up a timer to try and reconnects the websocket if the connection is lost.
+	GetWorld()->GetTimerManager().SetTimer(timerHandle, [this]() {
+		if (!Websocket->IsConnected ())
+		{
+			Websocket->Connect ();
+		}
+	}, 	5.0f, true, 5.f);
 }
 
 /*
@@ -83,6 +105,10 @@ void UNanoWebsocket::WatchAccount(const FString& account)
 
 void UNanoWebsocket::RegisterAccount(const FString& account)
 {
+	{
+		FScopeLock lk(&mutex);
+		registeredAccounts.Emplace (account);
+	}
 	if (!Websocket->IsConnected())
 	{
 		// Don't send if we're not connected.
@@ -97,6 +123,10 @@ void UNanoWebsocket::RegisterAccount(const FString& account)
 
 void UNanoWebsocket::UnregisterAccount(const FString& account)
 {
+	{
+		FScopeLock lk(&mutex);
+		registeredAccounts.Remove (account);
+	}
 	if (!Websocket->IsConnected())
 	{
 		// Don't send if we're not connected.
