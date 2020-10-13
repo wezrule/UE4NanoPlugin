@@ -1,7 +1,5 @@
 #include <nano/blocks.h>
 
-#include <cassert>
-
 nano::state_hashables::state_hashables (nano::account const & account_a, nano::block_hash const & previous_a, nano::account const & representative_a, nano::amount const & balance_a, nano::uint256_union const & link_a) :
 account (account_a),
 previous (previous_a),
@@ -38,10 +36,10 @@ nano::block_hash nano::state_block::hash () const
 	nano::uint256_union result;
 	blake2b_state hash_l;
 	auto status (blake2b_init (&hash_l, sizeof (result.bytes)));
-	assert (status == 0);
+	check (status == 0);
 	hash (hash_l);
 	status = blake2b_final (&hash_l, result.bytes.data (), sizeof (result.bytes));
-	assert (status == 0);
+	check (status == 0);
 	return result;
 }
 

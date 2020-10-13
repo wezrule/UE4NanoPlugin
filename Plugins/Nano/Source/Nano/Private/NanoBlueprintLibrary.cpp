@@ -4,8 +4,6 @@
 
 #include <Runtime/Core/Public/Misc/AES.h>
 
-#include <cassert>
-
 #include <sha256/sha256.hpp>
 
 #ifdef _WIN32
@@ -201,7 +199,7 @@ FString UNanoBlueprintLibrary::SHA256(const FString& string) {
 	return sha256(TCHAR_TO_UTF8(*string)).c_str();
 }
 
-// Taken from https://kelheor.space/2018/11/12/how-to-encrypt-data-with-aes-256-in-ue4/
+// Encrypt/Decrypt both taken from https://kelheor.space/2018/11/12/how-to-encrypt-data-with-aes-256-in-ue4/
 UFUNCTION(BlueprintCallable, Category="Nano")
 FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& password) {
 	check (plainSeed.Len () == 64);

@@ -5,7 +5,6 @@
 #ifdef _WIN32
 #pragma warning(disable : 4804) /* '/': unsafe use of type 'bool' in operation warnings */
 #endif
-#include <cassert>
 #include <iomanip>
 #include <sstream>
 
@@ -13,25 +12,18 @@
 
 namespace
 {
-char const * base58_reverse ("~012345678~~~~~~~9:;<=>?@~ABCDE~FGHIJKLMNOP~~~~~~QRSTUVWXYZ[~\\]^_`abcdefghi");
-uint8_t base58_decode (char value)
-{
-	assert (value >= '0');
-	assert (value <= '~');
-	return static_cast<uint8_t> (base58_reverse[value - 0x30] - 0x30);
-}
 char const * account_lookup ("13456789abcdefghijkmnopqrstuwxyz");
 char const * account_reverse ("~0~1234567~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~89:;<=>?@AB~CDEFGHIJK~LMNO~~~~~");
 char account_encode (uint8_t value)
 {
-	assert (value < 32);
+	check (value < 32);
 	auto result (account_lookup[value]);
 	return result;
 }
 uint8_t account_decode (char value)
 {
-	assert (value >= '0');
-	assert (value <= '~');
+	check (value >= '0');
+	check (value <= '~');
 	auto result (account_reverse[value - 0x30]);
 	if (result != '~')
 	{
@@ -43,7 +35,7 @@ uint8_t account_decode (char value)
 
 void nano::uint256_union::encode_account (std::string & destination_a) const
 {
-	assert (destination_a.empty ());
+	check (destination_a.empty ());
 	destination_a.reserve (65);
 	uint64_t check1 (0);
 	blake2b_state hash;
@@ -145,14 +137,6 @@ bool nano::uint256_union::operator== (nano::uint256_union const & other_a) const
 	return bytes == other_a.bytes;
 }
 
-// Construct a uint256_union = AES_ENC_CTR (cleartext, key, iv)
-void nano::uint256_union::encrypt (nano::raw_key const & cleartext, nano::raw_key const & key, uint128_union const & iv)
-{
-	//CryptoPP::AES::Encryption alg (key.data.bytes.data (), sizeof (key.data.bytes));
-	//CryptoPP::CTR_Mode_ExternalCipher::Encryption enc (alg, iv.bytes.data ());
-	//enc.ProcessData (bytes.data (), cleartext.data.bytes.data (), sizeof (cleartext.data.bytes));
-}
-
 bool nano::uint256_union::is_zero () const
 {
 	return qwords[0] == 0 && qwords[1] == 0 && qwords[2] == 0 && qwords[3] == 0;
@@ -195,7 +179,7 @@ nano::uint256_union::uint256_union (std::string const & hex_a)
 {
 	auto error (decode_hex (hex_a));
 
-	assert (!error);
+	check (!error);
 }
 
 void nano::uint256_union::clear ()
@@ -218,7 +202,7 @@ nano::uint256_t nano::uint256_union::number () const
 
 void nano::uint256_union::encode_hex (std::string & text) const
 {
-	assert (text.empty ());
+	check (text.empty ());
 	auto temp = number ().ToString ();
 	temp.RemoveFromStart (TEXT ("0x"));
 
@@ -250,16 +234,11 @@ bool nano::uint256_union::decode_hex (std::string const & text)
 
 void nano::uint256_union::encode_dec (std::string & text) const
 {
-	assert (text.empty ());
-//	std::stringstream stream;
-	//stream << std::dec << std::noshowbase;
-//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
-	//text = stream.str ();
+	check (text.empty ());
 
 	auto temp = number ().ToString ();
 	temp.RemoveFromStart (TEXT ("0x"));
 	text = BaseConverter::HexToDecimalConverter ().Convert (std::string (TCHAR_TO_UTF8 (*temp.ToUpper ())));
-//	number_l.Parse (FString (text)));
 }
 
 bool nano::uint256_union::decode_dec (std::string const & text)
@@ -267,8 +246,6 @@ bool nano::uint256_union::decode_dec (std::string const & text)
 	auto error (text.size () > 78 || (text.size () > 1 && text.front () == '0') || (!text.empty () && text.front () == '-'));
 	if (!error)
 	{
-		//std::stringstream stream(text);
-		//stream << std::dec << std::noshowbase;
 		nano::uint256_t number_l;
 		try
 		{
@@ -340,7 +317,7 @@ nano::uint512_t nano::uint512_union::number () const
 
 void nano::uint512_union::encode_hex (std::string & text) const
 {
-	assert (text.empty ());
+	check (text.empty ());
 
 	auto temp = number ().ToString ();
 	temp.RemoveFromStart (TEXT ("0x"));
@@ -401,14 +378,6 @@ bool nano::raw_key::operator!= (nano::raw_key const & other_a) const
 	return !(*this == other_a);
 }
 
-// This this = AES_DEC_CTR (ciphertext, key, iv)
-void nano::raw_key::decrypt (nano::uint256_union const & ciphertext, nano::raw_key const & key_a, uint128_union const & iv)
-{
-	//CryptoPP::AES::Encryption alg (key_a.data.bytes.data (), sizeof (key_a.data.bytes));
-	//CryptoPP::CTR_Mode_ExternalCipher::Decryption dec (alg, iv.bytes.data ());
-	//dec.ProcessData (data.bytes.data (), ciphertext.bytes.data (), sizeof (ciphertext.bytes));
-}
-
 nano::uint512_union nano::sign_message (nano::raw_key const & private_key, nano::public_key const & public_key, nano::uint256_union const & message)
 {
 	nano::uint512_union result;
@@ -449,7 +418,7 @@ nano::uint128_union::uint128_union (std::string const & string_a)
 {
 	auto error (decode_hex (string_a));
 
-	assert (!error);
+	check (!error);
 }
 
 nano::uint128_union::uint128_union (uint64_t value_a)
@@ -502,16 +471,10 @@ nano::uint128_t nano::uint128_union::number () const
 
 void nano::uint128_union::encode_hex (std::string & text) const
 {
-	assert (text.empty ());
-//	std::stringstream stream;
-//	stream << std::hex << std::noshowbase << std::setw (32) << std::setfill ('0');
-//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
-
+	check (text.empty ());
 	auto temp = number ().ToString ();
 	temp.RemoveFromStart (TEXT ("0x"));
-
 	text = std::string (TCHAR_TO_UTF8 (*temp)); 
-//	text = stream.str ();
 }
 
 bool nano::uint128_union::decode_hex (std::string const & text)
@@ -535,15 +498,10 @@ bool nano::uint128_union::decode_hex (std::string const & text)
 
 void nano::uint128_union::encode_dec (std::string & text) const
 {
-	assert (text.empty ());
+	check (text.empty ());
 	auto temp = number ().ToString ();
 	temp.RemoveFromStart (TEXT ("0x"));
 	text = BaseConverter::HexToDecimalConverter ().Convert (std::string (TCHAR_TO_UTF8 (*temp.ToUpper ())));
-
-//	std::stringstream stream;
-//	stream << std::dec << std::noshowbase;
-//	stream << std::string (TCHAR_TO_UTF8 (*number ().ToString ()));
-//	text = stream.str ();
 }
 
 bool nano::uint128_union::decode_dec (std::string const & text, bool decimal)
@@ -591,7 +549,7 @@ std::string nano::uint128_union::to_string_dec () const
 
 std::string nano::to_string_hex (uint64_t const value_a)
 {
-	assert (false); // untested
+	check (false); // untested
 	std::stringstream stream;
 	stream << std::hex << std::noshowbase << std::setw (16) << std::setfill ('0');
 	stream << value_a;
