@@ -3,6 +3,8 @@ const http = require('http');
 const hostname = '127.0.0.1';
 const port = config.host_port;
 
+console.log("Do not use in production!!!!!!!!!!!!");
+
 // Send request to the RPC server of the node and record response
 send = (json_string) => {
 
@@ -104,6 +106,7 @@ const server = http.createServer((req, res) => {
         const allowed_actions = ["account_info", "account_balance", "block_info", "pending", "process", "work_generate"];
         if (action == "request_nano") {
 
+            // The node generates this work so can be slow if calling before pre-generation is done
             let send_obj = {};
             send_obj.action = "send";
             send_obj.wallet = config.node.wallet;
@@ -197,17 +200,23 @@ const ws_server = new WebSocket.Server({
 ws.onopen = () => {
     // Subscribe to the websocket API of the node filtered only to the accounts we care about
     subscribe_to_accounts = (accounts, ws) => {
-        const confirmation_subscription = {
-            "action": "subscribe",
-            "topic": "confirmation",
-            "options": {
-                "accounts": accounts
-            }
-        }
-        ws.send(JSON.stringify(confirmation_subscription));
     };
 
-    var accounts = [];
+    // This stores map<ws_connection, set<string>>. The set is accounts 
+    let ws_account_map = new Map();
+
+    // This stores map<account, set<ws_connection>>;
+    let account_ws_map = new Map();
+
+    const confirmation_subscription = {
+        "action": "subscribe",
+        "topic": "confirmation",
+        "options": {
+            "accounts": ""
+        }
+    }
+    // Send empty list of accoutns just to get the subscription (TODO, necessary?)
+    ws.send(JSON.stringify(confirmation_subscription));
 
     // Listen for Unreal Engine clients connecting to us
     ws_server.on('connection', function connection(ws_server) {
@@ -216,12 +225,61 @@ ws.onopen = () => {
 
             let json = JSON.parse(message);
             if (json.action == "register_account") {
-                accounts.push(json.account);
-                subscribe_to_accounts(accounts, ws);
+
+                if (ws_account_map.has(ws_server)) {
+                    ws_account_map[ws_server].add(json.account);
+                }
+                else {
+                    ws_account_map[ws_server] = new Set();
+                    ws_account_map[ws_server].add(json.account);
+                }
+
+                if (account_ws_map.has(json.account)) {
+                    account_ws_map[json.account].add(ws_server);
+                }
+                else {
+                    account_ws_map[json.account] = new Set();
+                    account_ws_map[json.account].add(ws_server);
+                }
+
+                const confirmation_subscription_account_add = {
+                    "action": "update",
+                    "topic": "confirmation",
+                    "options": {
+                        "accounts_add": [
+                            json.account
+                        ],
+                    }
+                };
+
+                ws.send(JSON.stringify(confirmation_subscription_account_add));
             }
             else if (json.action == "unregister_account") {
-                accounts = accounts.filter(item => item == json.account);
-                subscribe_to_accounts(accounts, ws);
+
+                account_ws_map[json.account].delete(ws_server);
+                if (account_ws_map[json.account].size == 0) {
+                    account_ws_map.delete(json.account);
+                }
+
+                ws_account_map[ws_server].delete(json.account);
+                if (ws_account_map[ws_server].size == 0) {
+                    ws_account_map.delete(ws_server);
+                }
+
+                // Is this the last reference to this account?
+                if (account_ws_map.size == 0) {
+                    const confirmation_subscription_account_delete = {
+                        "action": "update",
+                        "topic": "confirmation",
+                        "options": {
+                            "accounts_del": [
+                                json.account
+                            ],
+                        }
+                    };
+
+                    ws.send(JSON.stringify(confirmation_subscription_account_delete));
+                }
             }
             else {
                 console.log('Other received: %s', message);
@@ -232,10 +290,30 @@ ws.onopen = () => {
         ws.onmessage = msg => {
             data_json = JSON.parse(msg.data);
 
+            // Check if this websocket connection is listening on this account
             if (data_json.topic === "confirmation") {
-                // Send the whole thing we received to the client
-                ws_server.send(msg.data);
+                // Send the whole thing we received to the client if they are listening
+                if (ws_account_map[ws_server].has(data_json.message.account)) {
+                    ws_server.send(msg.data);
+                }
             }
         };
+
+        ws_server.on("close", () => {
+
+            // Loop through all accounts this connection was listening to and delete as appropriate. Seems safe??
+            for (let account of ws_account_map[ws_server]) {
+
+                account_ws_map[account].delete(ws_server);
+                if (account_ws_map[account].size == 0) {
+                    account_ws_map.delete(account);
+                }
+
+                ws_account_map[ws_server].delete(account);
+                if (ws_account_map[ws_server].size == 0) {
+                    ws_account_map.delete(ws_server);
+                }
+            }
+        })
     });
 }
