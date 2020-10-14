@@ -27,7 +27,14 @@
 #define RESPONSE_ARGUMENTS request, response, wasSuccessful
 
 void UNanoManager::SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket) {
-	websocket->onResponse.AddDynamic (this, &UNanoManager::OnReceiveMessage); // TODO: Should only call this once, but websocket needs to be initialized
+	if (!websocket->onResponse.Contains (this, "OnReceiveMessage"))
+	{
+		// Make sure to only call this once for the entirety of the program...
+		static int num_called = 0;
+		check (num_called == 0);
+		websocket->onResponse.AddDynamic (this, &UNanoManager::OnReceiveMessage);
+		++num_called;
+	}
 }
 
 void UNanoManager::GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress) {
