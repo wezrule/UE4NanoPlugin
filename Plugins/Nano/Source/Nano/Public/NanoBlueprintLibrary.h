@@ -17,6 +17,12 @@ public:
 	static FString NanoToRaw(const FString& nano);
 
 	UFUNCTION(BlueprintCallable, Category="Nano")
+	static bool ValidateRaw (const FString& raw);
+
+	UFUNCTION(BlueprintCallable, Category="Nano")
+	static bool ValidateNano (const FString& nano);
+
+	UFUNCTION(BlueprintCallable, Category="Nano")
 	static FString Add(FString raw1, FString raw2);
 
 	UFUNCTION(BlueprintCallable, Category="Nano")

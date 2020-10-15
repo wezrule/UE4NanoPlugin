@@ -1,6 +1,7 @@
 #include "NanoBlueprintLibrary.h"
 #include <memory>
 #include <duthomhas/csprng.hpp>
+#include <baseconverter/base_converter.hpp>
 
 #include <Runtime/Core/Public/Misc/AES.h>
 
@@ -13,6 +14,8 @@
 #include <ed25519-donna/ed25519.h>
 #include <nano/numbers.h>
 
+using namespace std::literals;
+
 namespace
 {
 nano::public_key PrivateKeyToPublicKeyData (const FString& privateKey);
@@ -20,7 +23,87 @@ nano::private_key SeedAccountPrvData (const FString& seed_f, int32 index);
 nano::public_key SeedAccountPubData (const FString& seed, int32 index);
 }
 
+bool UNanoBlueprintLibrary::ValidateRaw (const FString& raw)
+{
+	// Rudimentary check... it could still be above the largest raw value at 39 digits but shouldn't be a problem
+	if (raw.Len () > 39 || raw.IsEmpty ()) {
+		return false;
+	}
+
+	// Check that it contains only 0-9 digits
+	auto str = std::string (TCHAR_TO_UTF8(*raw));
+	auto valid = str.end() == std::find_if(str.begin(), str.end(), [](unsigned char c) {
+		return !isdigit(c);
+	});
+
+	if (valid) {
+		nano::uint256_t num (BaseConverter::DecimalToHexConverter ().Convert ((TCHAR_TO_UTF8(*raw))).c_str ());
+		valid = (num <= nano::uint256_t (BaseConverter::DecimalToHexConverter ().Convert ("340282366920938463463374607431768211455").c_str ()));
+	}
+	return valid;
+}
+
+// Could probably use regex for some of this
+bool UNanoBlueprintLibrary::ValidateNano (const FString& nano)
+{
+	if (nano.Len () > 40 || nano.IsEmpty ()) {
+		return false;
+	}
+
+	// Check that it contains only 0-9 digits and at most 1 decimal
+	auto error = false;
+	auto num_decimal_points = 0;
+	auto decimal_point_index = -1;
+	for (auto i = 0; i < nano.Len (); ++i)
+	{
+		auto c = nano[i];
+		if (!std::isdigit (c))
+		{
+			if (c == '.') {
+				decimal_point_index = i;
+				++num_decimal_points;
+			} else {
+				error = true;
+				break;
+			}	
+		}
+	}
+
+	if (error || num_decimal_points > 1)
+	{
+		return false;
+	}
+
+	if (decimal_point_index == -1)
+	{
+		// There is no decimal and it contains only digits
+		auto as_int = FCString::Atoi (*nano);
+		return as_int <= 340'282'366; // This is the maximum amount of Nano there is
+	}
+	else
+	{
+		// Split the string
+		FString integer_part;
+		FString fraction_part;
+		if (!nano.Split (".", &integer_part, &fraction_part) || integer_part.Len () > 9) {
+			return false;
+		}
+		
+		auto as_int = FCString::Atoi (*integer_part);
+		error = as_int > 340'282'366; // This is the maximum amount of Nano there is
+		if (!error) {
+			
+			nano::uint128_t max (BaseConverter::DecimalToHexConverter ().Convert ("920938463463374607431768211456").c_str ());
+			nano::uint128_t num (BaseConverter::DecimalToHexConverter ().Convert ((TCHAR_TO_UTF8(*fraction_part))).c_str ());
+			error = num > max;
+		}
+	}
+
+	return !error;
+}
+
 FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
+	check (ValidateNano (nano));
 
 	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
 	auto str = std::string (TCHAR_TO_UTF8(*nano));
@@ -54,9 +137,8 @@ FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 	return std::string (raw.begin () + start_index, raw.end ()).c_str ();
 }
 
-using namespace std::literals;
-
 FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
+	check (ValidateRaw (raw));
 
 	// Insert a decimal 30 decimal places from the right
 	auto str = std::string (TCHAR_TO_UTF8(*raw));

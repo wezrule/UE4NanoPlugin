@@ -10,6 +10,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNanoBlueprintLibraryTest, "NanoBlueprintLibrar
 
 bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 {
+	// Validate nano/raw functions
+	TestTrue (TEXT ("100.123 nano is valid"), UNanoBlueprintLibrary::ValidateNano ("100.123"));
+	TestFalse (TEXT ("Invalid characters nano"), UNanoBlueprintLibrary::ValidateNano ("100,123"));
+	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano ("340282366.920938463463374607431768211455"));
+	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano ("0.1231231"));
+	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano (".1223"));
+
+	TestTrue (TEXT ("100 raw is valid"), UNanoBlueprintLibrary::ValidateRaw ("100"));
+	TestTrue (TEXT ("Exactly max raw supply"), UNanoBlueprintLibrary::ValidateRaw ("340282366920938463463374607431768211455"));
+	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("100.123"));
+	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("100@123"));
+	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("0000"));
+	TestFalse (TEXT ("A lot above max"), UNanoBlueprintLibrary::ValidateRaw ("1111111111111111111111111111111111111111111111111111111111"));
+	TestFalse (TEXT ("1 above max raw supply"), UNanoBlueprintLibrary::ValidateRaw ("340282366920938463463374607431768211456"));
+
 	// Raw to nano
 	auto raw = FString (TEXT ("10000000000000000000000000000000"));
 	auto nano = UNanoBlueprintLibrary::RawToNano (raw);
@@ -47,6 +62,12 @@ bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 	nano = TEXT ("0.1");
 	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);
 	TestEqual (TEXT ("0.1Nano to raw"), raw, TEXT ("100000000000000000000000000000"));
+	nano = TEXT (".1");
+	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);
+	TestEqual (TEXT (".1Nano to raw"), raw, TEXT ("100000000000000000000000000000"));
+	nano = TEXT ("00000.1");
+	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);
+	TestEqual (TEXT (".1Nano to raw"), raw, TEXT ("100000000000000000000000000000"));
 
 	nano = TEXT ("0.01");
 	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);

@@ -30,10 +30,7 @@ void UNanoManager::SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocke
 	if (!websocket->onResponse.Contains (this, "OnReceiveMessage"))
 	{
 		// Make sure to only call this once for the entirety of the program...
-		static int num_called = 0;
-		check (num_called == 0);
 		websocket->onResponse.AddDynamic (this, &UNanoManager::OnReceiveMessage);
-		++num_called;
 	}
 }
 
