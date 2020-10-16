@@ -23,9 +23,9 @@ bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 
 	TestTrue (TEXT ("100 raw is valid"), UNanoBlueprintLibrary::ValidateRaw ("100"));
 	TestTrue (TEXT ("Exactly max raw supply"), UNanoBlueprintLibrary::ValidateRaw ("340282366920938463463374607431768211455"));
-	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("100.123"));
+	TestFalse (TEXT ("Invalid characters raw, decimal not allowed"), UNanoBlueprintLibrary::ValidateRaw ("100.123"));
 	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("100@123"));
-	TestFalse (TEXT ("Invalid characters raw"), UNanoBlueprintLibrary::ValidateRaw ("0000"));
+	TestTrue (TEXT ("Leading zeroes are ok"), UNanoBlueprintLibrary::ValidateRaw ("0001"));
 	TestFalse (TEXT ("A lot above max"), UNanoBlueprintLibrary::ValidateRaw ("1111111111111111111111111111111111111111111111111111111111"));
 	TestFalse (TEXT ("1 above max raw supply"), UNanoBlueprintLibrary::ValidateRaw ("340282366920938463463374607431768211456"));
 

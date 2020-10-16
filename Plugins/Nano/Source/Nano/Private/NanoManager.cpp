@@ -777,7 +777,7 @@ bool UNanoManager::RequestResponseIsValid(RESPONSE_PARAMETERS) {
 	}
 }
 
-#ifdef PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 #include <shlobj.h>
 #elif PLATFORM_MAC
 #include <Foundation/Foundation.h>	
