@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <unordered_map>
+#include <string>
 #include "NanoManager.generated.h"
 
 #define RESPONSE_PARAMETERS FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful

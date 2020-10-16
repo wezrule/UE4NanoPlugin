@@ -7,6 +7,7 @@
 #include "NanoTypes.h"
 
 #include "Runtime/Engine/Public/TimerManager.h"
+#include "Runtime/Engine/Classes/Engine/World.h"
 
 #include "WebSocketsModule.h" // Module definition
 #include "Modules/ModuleManager.h"

@@ -2,6 +2,7 @@
 #include "Engine.h"
 #include "Runtime/Online/HTTP/Public/HttpModule.h"
 #include "Runtime/Online/HTTP/Public/Http.h"
+#include "Runtime/Engine/Classes/Engine/World.h"
 
 #include "Json.h"
 #include "JsonObjectConverter.h"
@@ -165,7 +166,7 @@ void UNanoManager::Watch(FAutomateResponseReceivedDelegate delegate, FString con
 	websocket->RegisterAccount(account);
 
 	// Keep a mapping of automatic listening delegates
-	keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(TCHAR_TO_UTF8(*account)), std::forward_as_tuple("", delegate)).first->second;
+	keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(TCHAR_TO_UTF8(*account)), std::forward_as_tuple("", delegate));
 }
 
 void UNanoManager::Unwatch(const FString& account, UNanoWebsocket* websocket) {
@@ -776,18 +777,18 @@ bool UNanoManager::RequestResponseIsValid(RESPONSE_PARAMETERS) {
 	}
 }
 
-#ifdef _WIN32
+#ifdef PLATFORM_WINDOWS
 #include <shlobj.h>
-#elif __APPLE__
+#elif PLATFORM_MAC
 #include <Foundation/Foundation.h>	
-#else
+#elif PLATFORM_LINUX
 #include <pwd.h>
 #endif
 
 FString UNanoManager::getDefaultDataPath() const
 {
 	FString result;
-#ifdef _WIN32
+#if PLATFORM_WINDOWS
 	WCHAR path[MAX_PATH];
 	if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
 		std::wstring string(path);
@@ -796,20 +797,23 @@ FString UNanoManager::getDefaultDataPath() const
 	} else {
 		check(false);
 	}
-#elif __APPLE__
+#elif PLATFORM_MAC
 	NSString* dir_string = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
 	char const* dir_chars = [dir_string UTF8String];
 	std::string string(dir_chars);
 	string += "/Nano_Games";
 	result = string.c_str();
 	[dir_string release] ;
-#else
+#elif PLATFORM_LINUX
 	auto entry(getpwuid(getuid()));
 	check(entry != nullptr);
-	std::wstring string(entry->pw_dir);
+	std::string string(entry->pw_dir);
 	string += "/Nano_Games";
 	result = string.c_str();
+#else
+	result = FPaths::ProjectSavedDir() / "Nano_Games";
 #endif
+
 	return result;
 }
 
