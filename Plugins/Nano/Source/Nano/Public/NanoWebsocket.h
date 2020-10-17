@@ -19,8 +19,62 @@ struct NANO_API FWebsocketConnectResponseData {
 	FString errorMessage;
 };
 
+UENUM(BlueprintType)
+ enum class FSubtype : uint8 {
+	send,
+	receive,
+	change,
+	epoch,
+	open
+};
+
+// This is needed for Blueprint by user
+USTRUCT(BlueprintType)
+struct NANO_API FWebsocketBlock {
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString account;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString previous;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString representative;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString balance;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString link;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FSubtype subtype;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
+	FString work;
+};
+
+USTRUCT(BlueprintType)
+struct NANO_API FWebsocketConfirmationResponseData {
+	
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConfirmationResponse")
+	FString account;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConfirmationResponse")
+	FString amount;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConfirmationResponse")
+	FString hash;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConfirmationResponse")
+	FWebsocketBlock block;
+};
+
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWebsocketConnectedDelegate, FWebsocketConnectResponseData, data);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketMessageResponseDelegate, const FString&, data);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketMessageResponseDelegate, const FWebsocketConfirmationResponseData&, data);
 
 UCLASS(BlueprintType, Blueprintable)
 class NANO_API UNanoWebsocket : public UObject
@@ -39,6 +93,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = WebSocket)
 	FWebsocketMessageResponseDelegate onResponse;
+
+	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
+	void ListenAllConfirmations ();
 
 protected:
 	void BeginDestroy () override;

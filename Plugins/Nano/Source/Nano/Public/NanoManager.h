@@ -61,6 +61,9 @@ public:
 	void Process(FProcessResponseReceivedDelegate delegate, FBlock block);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void ProcessWaitConfirmation (FProcessResponseReceivedDelegate delegate, FBlock block);
+
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
@@ -107,7 +110,7 @@ public:
 	TArray<FString> GetSeedFiles() const;
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void SetupReceiveMessageWebsocketListener(UNanoWebsocket* websocket);
+	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	FString rpcUrl;
@@ -146,6 +149,8 @@ private:
 
 	void Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate);
 
+	void RegisterBlockListener (std::string const & account, FProcessResponseData const & process_response_data, FProcessResponseReceivedDelegate delegate);
+
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account);
 	static FPendingResponseData GetPendingResponseData(RESPONSE_PARAMETERS);
 	static FGetBalanceResponseData GetBalanceResponseData(RESPONSE_PARAMETERS);
@@ -163,10 +168,10 @@ private:
 	void AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks);
 	void AutomatePocketPendingUtility(const FString& account);
 
-	void GetFrontierAndFire(const TSharedPtr<FJsonObject>& message_json, FString const & account, bool isSend);
+	void GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, bool isSend);
 
 	UFUNCTION()
-	void OnReceiveMessage(const FString& data);
+	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData & data);
 
 	FString getDefaultDataPath() const;
 	FString dataPath{ getDefaultDataPath() };

@@ -198,9 +198,6 @@ const ws_server = new WebSocket.Server({
 });
 
 ws.onopen = () => {
-    // Subscribe to the websocket API of the node filtered only to the accounts we care about
-    subscribe_to_accounts = (accounts, ws) => {
-    };
 
     // This stores map<ws_connection, set<string>>. The set is accounts 
     let ws_account_map = new Map();
@@ -316,4 +313,9 @@ ws.onopen = () => {
             }
         })
     });
+}
+
+ws.onerror = e => {
+  // Error connecting to node
+  console.log (e);
 }

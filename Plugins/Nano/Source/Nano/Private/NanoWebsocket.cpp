@@ -80,16 +80,59 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 		}
 	});
 
-	Websocket->OnMessage().AddLambda([this](const FString& MessageString) -> void {
-		onResponse.Broadcast (MessageString);
+	Websocket->OnMessage().AddLambda([this](const FString& in_data) -> void {
+
+		TSharedRef< TJsonReader<> > JsonReader = TJsonReaderFactory<>::Create(in_data);
+		TSharedPtr<FJsonObject> response;
+		if (FJsonSerializer::Deserialize(JsonReader, response)) {
+
+			// Only care about confirmation websocket events
+			auto topic = response->GetStringField("topic");
+			if (topic == "confirmation")
+			{
+				auto message_json = response->GetObjectField("message");
+
+				FWebsocketConfirmationResponseData data;
+				data.account = message_json->GetStringField ("account");
+				data.amount = message_json->GetStringField ("amount");
+				data.hash = message_json->GetStringField ("hash");
+				
+				auto block_json = message_json->GetObjectField("block");
+	
+				data.block.account = block_json->GetStringField("account");
+				data.block.balance = block_json->GetStringField("balance");
+				data.block.link = block_json->GetStringField("link");
+				data.block.previous = block_json->GetStringField("previous");
+				data.block.representative = block_json->GetStringField("representative");
+				data.block.work = block_json->GetStringField("work");
+
+				auto subtype_str = block_json->GetStringField ("subtype");
+				FSubtype subtype;
+				if (subtype_str == "send") {
+					subtype = FSubtype::send;
+				} else if (subtype_str == "receive") {				
+					subtype = FSubtype::receive;
+				} else if (subtype_str == "open") {
+					subtype = FSubtype::open;
+				} else if (subtype_str == "change") {
+					subtype = FSubtype::change;
+				} else {
+					check (subtype_str == "epoch");
+					subtype = FSubtype::epoch;
+				}
+
+				data.block.subtype = subtype;
+
+				onResponse.Broadcast (data);
+			}
+		}
 	});
 
 	Websocket->Connect();
 
 	// Set up a timer to try and reconnects the websocket if the connection is lost.
 	GetWorld()->GetTimerManager().SetTimer(timerHandle, [this]() {
-		if (!Websocket->IsConnected ())
-		{
+		if (!Websocket->IsConnected ()) {
 			Websocket->Connect ();
 		}
 	}, 	5.0f, true, 5.f);
@@ -110,8 +153,7 @@ void UNanoWebsocket::RegisterAccount(const FString& account)
 		FScopeLock lk(&mutex);
 		registeredAccounts.Emplace (account);
 	}
-	if (!Websocket->IsConnected())
-	{
+	if (!Websocket->IsConnected()) {
 		// Don't send if we're not connected.
 		return;
 	}
@@ -128,8 +170,7 @@ void UNanoWebsocket::UnregisterAccount(const FString& account)
 		FScopeLock lk(&mutex);
 		registeredAccounts.Remove (account);
 	}
-	if (!Websocket->IsConnected())
-	{
+	if (!Websocket->IsConnected()) {
 		// Don't send if we're not connected.
 		return;
 	}
@@ -144,4 +185,10 @@ void UNanoWebsocket::UnregisterAccount(const FString& account)
 	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
 
 	Websocket->Send(OutputString);
+}
+
+// Do not mix this websocket object
+void UNanoWebsocket::ListenAllConfirmations()
+{
+	Websocket->Send("listen_all");
 }
