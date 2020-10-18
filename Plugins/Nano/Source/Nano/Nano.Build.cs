@@ -11,7 +11,10 @@ public class Nano : ModuleRules
 		PublicDefinitions.Add("ED25519_CUSTOMRNG");
 		PublicDefinitions.Add("ED25519_CUSTOMHASH");
 
-		bEnableExceptions = true;
+		if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+			PublicDefinitions.Add("_CRT_SECURE_NO_WARNINGS");
+		}
 
 		// To remove warnings like: error C4668: '__clang_major___WORKAROUND_GUARD' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif'
 		bEnableUndefinedIdentifierWarnings = false;

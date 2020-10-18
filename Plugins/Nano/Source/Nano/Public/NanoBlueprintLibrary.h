@@ -74,4 +74,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Nano")
 	static FString Decrypt(FString cipherPrvKey, const FString& password);
+
+	UFUNCTION(BlueprintCallable, Category="Nano")
+	static UTexture2D* GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin = 10);
+
+	UFUNCTION(BlueprintCallable, Category="Nano")
+	static UTexture2D* GenerateQRCodeTextureWithAmount(const int32& Size, const FString& account, const FString& amount, int32 Margin = 10);
 };

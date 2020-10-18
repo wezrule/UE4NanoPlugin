@@ -45,6 +45,12 @@ public:
 	FTimerHandle timerHandle;
 };
 
+struct ListeningPayment {
+	FListenPaymentDelegate delegate;
+	FString account;
+	FString amount;
+};
+
 UCLASS(BlueprintType, Blueprintable)
 class NANO_API UNanoManager : public UObject
 {
@@ -112,6 +118,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
 
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void ListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	FString rpcUrl;
 
@@ -124,6 +133,9 @@ private:
 
 	FCriticalSection sendBlockListenerMutex;
 	std::unordered_map<std::string, SendDelegate> sendBlockListener;
+
+	FCriticalSection listeningPaymentMutex;
+	ListeningPayment listeningPayment;
 
 	struct ReqRespJson {
 		TSharedPtr<FJsonObject> request;

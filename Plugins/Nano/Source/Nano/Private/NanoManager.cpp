@@ -191,11 +191,13 @@ void UNanoManager::Watch(FAutomateResponseReceivedDelegate delegate, FString con
 	websocket->RegisterAccount(account);
 
 	// Keep a mapping of automatic listening delegates
+	FScopeLock lk (&keyDelegateMutex);
 	keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(TCHAR_TO_UTF8(*account)), std::forward_as_tuple("", delegate));
 }
 
 void UNanoManager::Unwatch(const FString& account, UNanoWebsocket* websocket) {
 	websocket->UnregisterAccount(account);
+	FScopeLock lk (&keyDelegateMutex);
 	keyDelegateMap.erase(TCHAR_TO_UTF8(*account));
 }
 
@@ -452,24 +454,40 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 			}
 		}
 
-		FScopeLock lk (&keyDelegateMutex);
-		auto account = data.block.account;
-		auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
-		if (it != keyDelegateMap.end ()) {
-			// This is a send from us to someone else
-			GetFrontierAndFire(data.amount, data.hash, account, true);
-			lk.Unlock ();
+		{
+			FScopeLock lk (&keyDelegateMutex);
+			auto account = data.block.account;
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+			if (it != keyDelegateMap.end ()) {
+				// This is a send from us to someone else
+				GetFrontierAndFire(data.amount, data.hash, account, true);
+				lk.Unlock ();
 
-			auto hash_std_str = std::string (TCHAR_TO_UTF8 (*data.hash));
+				auto hash_std_str = std::string (TCHAR_TO_UTF8 (*data.hash));
 
-			FScopeLock sendBlockLk (&sendBlockListenerMutex);
-			auto it1 = sendBlockListener.find (hash_std_str);
-			if (it1 != sendBlockListener.cend ())
-			{
-				// Call delegate now that the send has been confirmed
-				it1->second.delegate.ExecuteIfBound (it1->second.data);
-				GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
-				sendBlockListener.erase (it1);
+				FScopeLock sendBlockLk (&sendBlockListenerMutex);
+				auto it1 = sendBlockListener.find (hash_std_str);
+				if (it1 != sendBlockListener.cend ())
+				{
+					// Call delegate now that the send has been confirmed
+					it1->second.delegate.ExecuteIfBound (it1->second.data);
+					GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
+					sendBlockListener.erase (it1);
+				}
+			}
+		}
+
+		// Are we listening for a payment? Only one of these will be active at once
+		{
+			FScopeLock lk (&listeningPaymentMutex);
+			if (listeningPayment.delegate.IsBound ()) {
+			
+				auto account = FString (nano::account (TCHAR_TO_UTF8(*data.block.link)).to_account ().c_str ());
+				if (listeningPayment.account == account && listeningPayment.amount == data.amount)
+				{
+					listeningPayment.delegate.ExecuteIfBound (data.hash);
+					listeningPayment.delegate.Unbind ();		
+				}
 			}
 		}
 	}
@@ -729,6 +747,16 @@ FProcessResponseData UNanoManager::GetProcessResponseData(RESPONSE_PARAMETERS) {
 
 	data.hash = reqRespJson.response->GetStringField("hash");
 	return data;
+}
+
+void UNanoManager::ListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount)
+{
+	{
+		FScopeLock lk (&listeningPaymentMutex);
+		listeningPayment.account = account;
+		listeningPayment.amount = amount;
+		listeningPayment.delegate = delegate;
+	}
 }
 
 TSharedRef<IHttpRequest> UNanoManager::CreateHttpRequest(TSharedPtr<FJsonObject> JsonObject) {

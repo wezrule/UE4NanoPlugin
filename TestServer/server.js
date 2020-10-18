@@ -1,6 +1,6 @@
 const config = require('./config');
 const http = require('http');
-const hostname = '127.0.0.1';
+const hostname = '192.168.1.2';
 const port = config.host_port;
 
 console.log("Do not use in production!!!!!!!!!!!!");
@@ -67,7 +67,7 @@ dpow_wss.onopen = () => {
         let data_json = JSON.parse(msg.data);
         console.log(data_json);
 
-        let value_l = dpow_request_map[data_json.id];
+        let value_l = dpow_request_map.get(data_json.id);
         if (!data_json.hasOwnProperty("error")) {
 
             let new_response = {};
@@ -88,7 +88,7 @@ dpow_wss.onopen = () => {
                     value_l.res.end('{"error":"1"}');
                 });
         }
-        delete dpow_request_map[data_json.id];
+        delete dpow_request_map.get (data_json.id);
     };
 };
 const server = http.createServer((req, res) => {
@@ -157,7 +157,7 @@ const server = http.createServer((req, res) => {
             let value = {};
             value.res = res;
             value.hash = obj.hash;
-            dpow_request_map[id] = value;
+            dpow_request_map.set(id, value);
 
             // Send a request to the dpow server
             dpow_wss.send(JSON.stringify(dpow_request));
@@ -212,32 +212,59 @@ ws.onopen = () => {
             "accounts": ""
         }
     }
-    // Send empty list of accoutns just to get the subscription (TODO, necessary?)
+    // Send empty list of accoutns just to get the subscription
     ws.send(JSON.stringify(confirmation_subscription));
+
+
+        // The node sent us a message
+        ws.onmessage = msg => {
+            data_json = JSON.parse(msg.data);
+	    console.log (data_json);
+            // Check if this websocket connection is listening on this account
+            if (data_json.topic === "confirmation") {
+                // Send the whole thing we received to the client if they are listening
+                let clients = new Set ();
+		if (account_ws_map.has (data_json.message.account)) {
+			for (const client of account_ws_map.get (data_json.message.account))
+				clients.add (client);
+		}
+		if (account_ws_map.has (data_json.message.block.link_as_account)) {
+			for (const client of account_ws_map.get (data_json.message.block.link_as_account))
+				clients.add (client);
+		}
+
+		 for (const client of clients) {
+
+		    console.log ("send to client");
+			client.send(msg.data);
+		    }
+                }
+        };
 
     // Listen for Unreal Engine clients connecting to us
     ws_server.on('connection', function connection(ws_server) {
-        // Received a message from an Unreal Engine client
+
+	// Received a message from an Unreal Engine client
         ws_server.on('message', function incoming(message) {
 
             let json = JSON.parse(message);
             if (json.action == "register_account") {
-
                 if (ws_account_map.has(ws_server)) {
-                    ws_account_map[ws_server].add(json.account);
+                    ws_account_map.get(ws_server).add(json.account);
                 }
                 else {
-                    ws_account_map[ws_server] = new Set();
-                    ws_account_map[ws_server].add(json.account);
+                    ws_account_map.set (ws_server, new Set());
+                    ws_account_map.get (ws_server).add(json.account);
                 }
 
                 if (account_ws_map.has(json.account)) {
-                    account_ws_map[json.account].add(ws_server);
+                    account_ws_map.get (json.account).add(ws_server);
                 }
                 else {
-                    account_ws_map[json.account] = new Set();
-                    account_ws_map[json.account].add(ws_server);
+                    account_ws_map.set (json.account, new Set());
+                    account_ws_map.get (json.account).add(ws_server);
                 }
+
 
                 const confirmation_subscription_account_add = {
                     "action": "update",
@@ -253,13 +280,13 @@ ws.onopen = () => {
             }
             else if (json.action == "unregister_account") {
 
-                account_ws_map[json.account].delete(ws_server);
-                if (account_ws_map[json.account].size == 0) {
+                account_ws_map.get(json.account).delete(ws_server);
+                if (account_ws_map.get(json.account).size == 0) {
                     account_ws_map.delete(json.account);
                 }
 
-                ws_account_map[ws_server].delete(json.account);
-                if (ws_account_map[ws_server].size == 0) {
+                ws_account_map.get(ws_server).delete(json.account);
+                if (ws_account_map.get(ws_server).size == 0) {
                     ws_account_map.delete(ws_server);
                 }
 
@@ -283,34 +310,23 @@ ws.onopen = () => {
             }
         });
 
-        // The node sent us a message
-        ws.onmessage = msg => {
-            data_json = JSON.parse(msg.data);
-
-            // Check if this websocket connection is listening on this account
-            if (data_json.topic === "confirmation") {
-                // Send the whole thing we received to the client if they are listening
-                if (ws_account_map[ws_server].has(data_json.message.account)) {
-                    ws_server.send(msg.data);
-                }
-            }
-        };
-
         ws_server.on("close", () => {
 
             // Loop through all accounts this connection was listening to and delete as appropriate. Seems safe??
-            for (let account of ws_account_map[ws_server]) {
+	if (ws_account_map.has(ws_server)) {
+		for (let account of ws_account_map.get(ws_server)) {
 
-                account_ws_map[account].delete(ws_server);
-                if (account_ws_map[account].size == 0) {
-                    account_ws_map.delete(account);
-                }
+			account_ws_map.get(account).delete(ws_server);
+			if (account_ws_map.get(account).size == 0) {
+			    account_ws_map.delete(account);
+			}
 
-                ws_account_map[ws_server].delete(account);
-                if (ws_account_map[ws_server].size == 0) {
-                    ws_account_map.delete(ws_server);
-                }
-            }
+			ws_account_map.get(ws_server).delete(account);
+			if (ws_account_map.get(ws_server).size == 0) {
+			    ws_account_map.delete(ws_server);
+			}
+		    }
+		}
         })
     });
 }

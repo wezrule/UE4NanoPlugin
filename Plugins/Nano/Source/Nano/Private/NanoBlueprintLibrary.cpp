@@ -7,6 +7,14 @@
 
 #include <sha256/sha256.hpp>
 
+#include "IImageWrapper.h"
+#include "Modules/ModuleManager.h"
+#include "ImageWrapper/Public/IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "HAL/FileManagerGeneric.h"
+
+#include <qrcode/QrCode.hpp>
+
 #ifdef _WIN32
 #pragma warning (disable : 4804 ) /* '/': unsafe use of type 'bool' in operation warnings */
 #endif
@@ -366,6 +374,124 @@ FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& passwo
 
 	delete Blob; 
 	return ""; 
+}
+
+// A lot of this was taken from: https://github.com/hzm/QRCode
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */)
+{
+	UTexture2D* texture = nullptr;
+
+	auto Width = (uint32) Size;
+	auto Height = (uint32) Size;
+
+	FString qrString = "nano:" + account;
+	if (amount != "")
+	{
+		qrString += "?amount=" + amount;
+	}
+
+	// Create the QR Code object
+	auto qr = qrcodegen::QrCode::encodeText(TCHAR_TO_UTF8(*qrString), qrcodegen::QrCode::Ecc::MEDIUM);
+
+	uint32 QRWidth, QRWidthAdjustedX, QRHeightAdjustedY, QRDataBytes;
+
+		QRWidth = qr.getSize ();
+		uint32 ScaleX = (Width - 2 * Margin) / QRWidth;
+		uint32 ScaleY = (Height - 2 * Margin) / QRWidth;
+		QRWidthAdjustedX = QRWidth * ScaleX;
+		QRHeightAdjustedY = QRWidth * ScaleY;
+		QRDataBytes = QRWidthAdjustedX * QRHeightAdjustedY * 3;
+
+		std::vector <uint8> RGBData (QRDataBytes, 0xff);
+		uint8* QRCodeDestData;
+		for (uint32 y = 0; y < QRWidth; y++)
+		{
+			QRCodeDestData = RGBData.data () + ScaleY * y * QRWidthAdjustedX * 3;
+			for (uint32 x = 0; x < QRWidth; x++)
+			{
+				if (qr.getModule(x, y)) // black
+				{
+					for (uint32 rectY = 0; rectY < ScaleY; rectY++)
+					{
+						for (uint32 rectX = 0; rectX < ScaleX; rectX++)
+						{
+							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3) = 0;//Blue
+							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 1) = 0;//Green
+							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 2) = 0;//Red
+						}
+					}
+				}
+				QRCodeDestData += ScaleX * 3;
+			}
+		}
+
+		auto scale_difference = Width - ScaleX;
+
+		TArray<uint8> ImageBGRAData;
+
+		for (uint32 i = 0; i < Width * Height * 4; i++)
+		{
+			ImageBGRAData.Add(0xFF);
+		}
+		for (uint32 y = Margin; y < QRHeightAdjustedY + Margin; y++)
+		{
+			for (uint32 x = Margin; x < QRWidthAdjustedX + Margin; x++)
+			{
+				for (int32 PixelByte = 0; PixelByte < 3; PixelByte++)
+				{
+					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
+					uint32 RGBDataIndex = ((y - Margin) * QRWidthAdjustedX + (x - Margin)) * 3 + PixelByte;
+					ImageBGRAData[ImageIndex] = RGBData[RGBDataIndex];
+				}
+			}
+		}
+
+		// Make the excess width/height have alpha to remove it, else there is excess white on the bottom/right for scale discrepancies.
+		for (uint32 y = QRHeightAdjustedY + Margin * 2; y < Height; y++)
+		{
+			for (uint32 x = 0; x < Width; x++)
+			{
+				for (int32 PixelByte = 0; PixelByte < 4; PixelByte++)
+				{
+					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
+					ImageBGRAData[ImageIndex] = 0x0;
+				}
+			}
+		}
+
+		for (uint32 y = 0; y < Height; y++)
+		{
+			for (uint32 x = QRWidthAdjustedX + Margin * 2; x < Width; x++)
+			{
+				for (int32 PixelByte = 0; PixelByte < 4; PixelByte++)
+				{
+					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
+					ImageBGRAData[ImageIndex] = 0x0;
+				}
+			}
+		}
+
+	IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+	TSharedPtr<IImageWrapper> TargetImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::BMP);
+	if (TargetImageWrapper.IsValid())
+	{
+		texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+		if (texture != nullptr)
+		{
+			FTexture2DMipMap& Mip = texture->PlatformData->Mips[0];
+			void* TextureData = Mip.BulkData.Lock(LOCK_READ_WRITE);
+			FMemory::Memcpy(TextureData, ImageBGRAData.GetData(), ImageBGRAData.Num());
+			Mip.BulkData.Unlock();
+			texture->UpdateResource();
+		}
+	}
+
+	return texture;
+}
+
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin /* = 10 */)
+{
+	return GenerateQRCodeTextureWithAmount(Size, account, "", Margin);
 }
 
 namespace

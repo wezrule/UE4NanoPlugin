@@ -10,10 +10,10 @@
 #include <duthomhas/csprng.h>
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
-#ifdef _WIN32
+#if PLATFORM_WINDOWS
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
 
-#include "AllowWindowsPlatformTypes.h"
+#include "Windows/AllowWindowsPlatformTypes.h"
 
   #include <windows.h>
   #include <wincrypt.h>
@@ -82,7 +82,7 @@
   }
   #endif
 
-#include "HideWindowsPlatformTypes.h"
+#include "Windows/HideWindowsPlatformTypes.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////// */
 #else  /* Using /dev/urandom                                                                     */

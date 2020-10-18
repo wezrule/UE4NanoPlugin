@@ -21,6 +21,8 @@ const ws_server = new WebSocket.Server({
     port: config.websocket.all_conf_host_port
 });
 
+let clients = new Set();
+
 // Register subscription with the node
 ws.onopen = () => {
 	console.log ("Connected with node");
@@ -32,22 +34,26 @@ ws.onopen = () => {
 
      ws.send(JSON.stringify(confirmation_subscription ));
 
+       // The node sent us a message
+        ws.onmessage = msg => {
+        data_json = JSON.parse(msg.data);
+
+        // Check if this websocket connection is listening on this account
+        if (data_json.topic === "confirmation") {
+            // Send the whole thing we received to the client if they are listening
+		for (let client of clients)
+		client.send(msg.data);
+        }
+      };
+
     // Listen for Unreal Engine clients connecting to us
     ws_server.on('connection', function connection(ws_server) {
-	console.log ("connected to use");
+	clients.add (ws_server);
 
-        // The node sent us a message
-        ws.onmessage = msg => {
-		console.log ("Node sent up an email");
-            data_json = JSON.parse(msg.data);
-
-            // Check if this websocket connection is listening on this account
-            if (data_json.topic === "confirmation") {
-                // Send the whole thing we received to the client if they are listening
-                ws_server.send(msg.data);
-            }
-        };
-    });
+        ws_server.on("close", () => {
+		clients.delete(ws_server);
+    	});
+	});
 }
 
 ws.onerror = e => {
