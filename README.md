@@ -9,7 +9,7 @@ There are various helpful videos, I suggest watching them in this order:
 - Video tutorial showing the test level: TBD
 - Video tutorial showing how to integrate in the ActionRPG shown above: TBD
 
-Tested with UE 4.25.3 with VS 2019 & MacOSX 10.14. Cross-compiled from Windows onto Linux with Clang. Also ran on android, but iOS is TBD. 
+Tested with UE 4.25.3 with VS 2019 & Xcode on MacOSX 10.15.7. Cross-compiled from Windows onto Linux with Clang. Also ran on android, but iOS hasn't been tried yet. 
 
 Limitations
 - QRCode supports only account, or account + amount
