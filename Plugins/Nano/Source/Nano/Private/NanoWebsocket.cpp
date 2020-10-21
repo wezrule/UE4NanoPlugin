@@ -107,23 +107,27 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 				data.block.work = block_json->GetStringField("work");
 
 				auto subtype_str = block_json->GetStringField ("subtype");
-				FSubtype subtype;
-				if (subtype_str == "send") {
-					subtype = FSubtype::send;
-				} else if (subtype_str == "receive") {				
-					subtype = FSubtype::receive;
-				} else if (subtype_str == "open") {
-					subtype = FSubtype::open;
-				} else if (subtype_str == "change") {
-					subtype = FSubtype::change;
-				} else {
-					check (subtype_str == "epoch");
-					subtype = FSubtype::epoch;
+				// If there's no subtype, it means it's not a state block
+				if (!subtype_str.IsEmpty ())
+				{
+					FSubtype subtype;
+					if (subtype_str == "send") {
+						subtype = FSubtype::send;
+					} else if (subtype_str == "receive") {				
+						subtype = FSubtype::receive;
+					} else if (subtype_str == "open") {
+						subtype = FSubtype::open;
+					} else if (subtype_str == "change") {
+						subtype = FSubtype::change;
+					} else {
+						check (subtype_str == "epoch");
+						subtype = FSubtype::epoch;
+					}
+
+					data.block.subtype = subtype;
+
+					onResponse.Broadcast (data);
 				}
-
-				data.block.subtype = subtype;
-
-				onResponse.Broadcast (data);
 			}
 		}
 	});

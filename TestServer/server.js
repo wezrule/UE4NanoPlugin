@@ -1,6 +1,6 @@
 const config = require('./config');
 const http = require('http');
-const hostname = '192.168.1.2';
+const hostname = config.hostname;
 const port = config.host_port;
 
 console.log("Do not use in production!!!!!!!!!!!!");
@@ -58,7 +58,7 @@ const dpow_wss = new ReconnectingWebSocket(config.dpow.ws_address, [], {
 
 let id = 0;
 let using_dpow = false;
-var dpow_request_map = {};
+let dpow_request_map = new Map();
 dpow_wss.onopen = () => {
     using_dpow = true;
 
@@ -103,7 +103,7 @@ const server = http.createServer((req, res) => {
         let action = obj.action;
 
         // The only RPC commands which are allowed
-        const allowed_actions = ["account_info", "account_balance", "block_info", "pending", "process", "work_generate"];
+        const allowed_actions = ["block_count", "account_info", "account_balance", "block_info", "pending", "process", "work_generate"];
         if (action == "request_nano") {
 
             // The node generates this work so can be slow if calling before pre-generation is done
