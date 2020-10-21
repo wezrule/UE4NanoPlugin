@@ -8,15 +8,12 @@ public class NanoTests : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDefinitions.Add("ED25519_CUSTOMRNG");
-		PublicDefinitions.Add("ED25519_CUSTOMHASH");
+		if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+		{
+			PublicDefinitions.Add("_CRT_SECURE_NO_WARNINGS");
+		}
 
-		bEnableExceptions = true;
-
-		// To remove warnings like: error C4668: '__clang_major___WORKAROUND_GUARD' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif'
-		bEnableUndefinedIdentifierWarnings = false;
-
-        PublicIncludePaths.AddRange(
+		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
 			}
