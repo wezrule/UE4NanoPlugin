@@ -215,7 +215,6 @@ ws.onopen = () => {
     // Send empty list of accoutns just to get the subscription
     ws.send(JSON.stringify(confirmation_subscription));
 
-
         // The node sent us a message
         ws.onmessage = msg => {
             data_json = JSON.parse(msg.data);
@@ -279,31 +278,32 @@ ws.onopen = () => {
                 ws.send(JSON.stringify(confirmation_subscription_account_add));
             }
             else if (json.action == "unregister_account") {
+		if (account_ws_map.has(json.account)) {
+                	account_ws_map.get(json.account).delete(ws_server);
+                	if (account_ws_map.get(json.account).size == 0) {
+                    		account_ws_map.delete(json.account);
+                	}
 
-                account_ws_map.get(json.account).delete(ws_server);
-                if (account_ws_map.get(json.account).size == 0) {
-                    account_ws_map.delete(json.account);
-                }
+                	ws_account_map.get(ws_server).delete(json.account);
+                	if (ws_account_map.get(ws_server).size == 0) {
+        	            ws_account_map.delete(ws_server);
+	                }
 
-                ws_account_map.get(ws_server).delete(json.account);
-                if (ws_account_map.get(ws_server).size == 0) {
-                    ws_account_map.delete(ws_server);
-                }
+               	 // Is this the last reference to this account?
+               	 if (account_ws_map.size == 0) {
+               	     const confirmation_subscription_account_delete = {
+               	         "action": "update",
+               	         "topic": "confirmation",
+              	          "options": {
+               	             "accounts_del": [
+               	                 json.account
+               	             ],
+        	                }
+	                    };
 
-                // Is this the last reference to this account?
-                if (account_ws_map.size == 0) {
-                    const confirmation_subscription_account_delete = {
-                        "action": "update",
-                        "topic": "confirmation",
-                        "options": {
-                            "accounts_del": [
-                                json.account
-                            ],
-                        }
-                    };
-
-                    ws.send(JSON.stringify(confirmation_subscription_account_delete));
-                }
+        	            ws.send(JSON.stringify(confirmation_subscription_account_delete));
+	                }
+		}
             }
             else {
                 console.log('Other received: %s', message);
