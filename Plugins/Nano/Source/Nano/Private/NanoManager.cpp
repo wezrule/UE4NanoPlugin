@@ -196,6 +196,8 @@ void UNanoManager::Watch(FAutomateResponseReceivedDelegate delegate, FString con
 }
 
 void UNanoManager::Unwatch(const FString& account, UNanoWebsocket* websocket) {
+
+	// TODO: Only unregister if there's no more delegates listening to this websocket
 	websocket->UnregisterAccount(account);
 	FScopeLock lk (&keyDelegateMutex);
 	keyDelegateMap.erase(TCHAR_TO_UTF8(*account));
@@ -333,7 +335,7 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 
 				// Form the output data
 				FAutomateResponseData automateData;
-				automateData.isSend = false;
+				automateData.type = FConfType::receive;
 
 				str = amount.number().ToString();
 				str.RemoveFromStart(TEXT("0x"));
@@ -396,10 +398,10 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 	});
 }
 
-void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, bool isSend)
+void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, FConfType type)
 {
 	// Get the account info and send that back along with the block that has been sent
-	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, isSend](RESPONSE_PARAMETERS) {
+	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, type](RESPONSE_PARAMETERS) {
 
 		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
 
@@ -410,7 +412,7 @@ void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash
 
 				// Form the output data
 				FAutomateResponseData automateData;
-				automateData.isSend = isSend;
+				automateData.type = type;
 				automateData.amount = amount;
 				automateData.balance = frontierData.balance;
 				automateData.account = account;
@@ -447,7 +449,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 				// This is a send to us from someone else
 				if (it->second.prv_key.IsEmpty ()) {
 					// We are just watching this so return now
-					GetFrontierAndFire (data.amount, data.hash, account, false);
+					GetFrontierAndFire (data.amount, data.hash, account, FConfType::send_to);
 				} else {
 					AutomatePocketPendingUtility(account);
 				}
@@ -460,7 +462,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
 			if (it != keyDelegateMap.end ()) {
 				// This is a send from us to someone else
-				GetFrontierAndFire(data.amount, data.hash, account, true);
+				GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
 				lk.Unlock ();
 
 				auto hash_std_str = std::string (TCHAR_TO_UTF8 (*data.hash));
@@ -497,7 +499,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 		auto account = data.account;
 		if (keyDelegateMap.count (TCHAR_TO_UTF8(*account)) > 0) {
 			// This is a receive to us
-			GetFrontierAndFire(data.amount, data.hash, account, false);
+			GetFrontierAndFire(data.amount, data.hash, account, FConfType::receive);
 		}
 	}
 }

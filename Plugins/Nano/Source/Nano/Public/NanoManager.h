@@ -180,7 +180,7 @@ private:
 	void AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks);
 	void AutomatePocketPendingUtility(const FString& account);
 
-	void GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, bool isSend);
+	void GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, FConfType type);
 
 	UFUNCTION()
 	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData & data);

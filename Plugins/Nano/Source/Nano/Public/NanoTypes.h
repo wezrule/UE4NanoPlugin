@@ -2,6 +2,13 @@
 
 #include "NanoTypes.generated.h"
 
+UENUM(BlueprintType)
+ enum class FConfType : uint8 {
+	send_to,
+	send_from,
+	receive
+};
+
 USTRUCT(BlueprintType)
 struct NANO_API FGetBalanceRequestData {
 	GENERATED_USTRUCT_BODY()
@@ -291,7 +298,7 @@ struct NANO_API FAutomateResponseData {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Automate")
-	bool isSend; //	Send/Receive
+	FConfType type;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Automate")
 	FString account;
@@ -337,7 +344,6 @@ struct NANO_API FSendArgs {
 	FString frontier;
 	FString representative;
 	TFunction<void(FProcessResponseData)> delegate;
-//	FProcessResponseReceivedDelegate delegate;
 };
 
 inline FString BytesToStringFixed(const uint8 *In, int32 Count)
