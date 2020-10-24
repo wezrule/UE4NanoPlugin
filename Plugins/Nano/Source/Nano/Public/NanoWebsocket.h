@@ -104,8 +104,10 @@ private:
 	TSharedPtr<IWebSocket> Websocket;
 	FTimerHandle timerHandle;
 
+	bool isReconnection{false};
+
 	FCriticalSection mutex;
 
 	// TODO: Should use nano::account
-	TSet<FString> registeredAccounts;
+	TMap<FString, int> registeredAccounts; // account and number of times it was registered
 };

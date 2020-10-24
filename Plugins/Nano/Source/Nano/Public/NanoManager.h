@@ -30,6 +30,21 @@ public:
 	FTimerHandle timerHandle;
 };
 
+class ReceiveDelegate {
+public:
+	ReceiveDelegate() = default;
+	ReceiveDelegate(const FAutomateResponseReceivedDelegate & delegate_, const FAutomateResponseData& data)
+		: delegate(delegate_),
+	data (data) { }
+
+	ReceiveDelegate(const ReceiveDelegate&) = delete;
+	ReceiveDelegate& operator= (const ReceiveDelegate&) = delete;
+
+	FAutomateResponseReceivedDelegate delegate;
+	FAutomateResponseData data;
+	FTimerHandle timerHandle;
+};
+
 class SendDelegate {
 public:
 	SendDelegate() = default;
@@ -94,11 +109,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AutomateUnregister(const FString& account, UNanoWebsocket* websocket);
 
-	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void Watch(FAutomateResponseReceivedDelegate delegate, FString const& account, UNanoWebsocket* websocket);
+	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
+	int32 Watch(const FWatchAccountReceivedDelegate & delegate, FString const& account, UNanoWebsocket* websocket);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void Unwatch(FString const& account, UNanoWebsocket* websocket);
+	void Unwatch(FString const& account, const int32& id, UNanoWebsocket* websocket);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetDataSubdirectory(FString const& subdir);
@@ -129,10 +144,17 @@ public:
 
 private:
 	FCriticalSection keyDelegateMutex;
-	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap; // Can't use TMap due to reference invalidation after emplace.
+	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap;
+
+	FCriticalSection watchersMutex;
+	TMap<FString, TMap<int32, FWatchAccountReceivedDelegate>> watchers;
+	int32 watcherId{0};
 
 	FCriticalSection sendBlockListenerMutex;
 	std::unordered_map<std::string, SendDelegate> sendBlockListener;
+
+	FCriticalSection receiveBlockListenerMutex;
+	std::unordered_map<std::string, ReceiveDelegate> receiveBlockListener;
 
 	FCriticalSection listeningPaymentMutex;
 	ListeningPayment listeningPayment;
@@ -162,6 +184,7 @@ private:
 	void Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate);
 
 	void RegisterBlockListener (std::string const & account, FProcessResponseData const & process_response_data, FProcessResponseReceivedDelegate delegate);
+	void AutomateRegisterReceiveBlockListener (std::string const & account, FAutomateResponseData const & automateResponseData, FAutomateResponseReceivedDelegate delegate);
 
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account);
 	static FPendingResponseData GetPendingResponseData(RESPONSE_PARAMETERS);
@@ -181,6 +204,9 @@ private:
 	void AutomatePocketPendingUtility(const FString& account);
 
 	void GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, FConfType type);
+
+	void GetFrontierAndFireWatchers (const FString& amount, const FString& hash, FString const & account, FConfType type);
+	FAutomateResponseData GetWebsocketResponseData (const FString& amount, const FString& hash, FString const & account, FConfType type, FAccountFrontierResponseData const & frontierData);
 
 	UFUNCTION()
 	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData & data);

@@ -331,6 +331,8 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FPendingResponseReceivedDelegate, FPendingResp
 DECLARE_DYNAMIC_DELEGATE_OneParam(FBlockConfirmedResponseReceivedDelegate, FBlockConfirmedResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FAutomateResponseReceivedDelegate, FAutomateResponseData, data);
 
+DECLARE_DYNAMIC_DELEGATE_OneParam(FWatchAccountReceivedDelegate, FAutomateResponseData, data);
+
 DECLARE_DYNAMIC_DELEGATE_OneParam(FListenPaymentDelegate, const FString&, hash);
 
 USTRUCT()

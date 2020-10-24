@@ -49,9 +49,9 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 	Websocket->OnConnected().AddLambda([delegate, this]() -> void {
 		{
 			FScopeLock lk(&mutex);
-			for (auto const & account : registeredAccounts) {
+			for (auto const & account_num_pair : registeredAccounts) {
 				FRegisterAccountRequestData registerAccount;
-				registerAccount.account = account;
+				registerAccount.account = account_num_pair.Key;
 				Websocket->Send(MakeOutputString (registerAccount));
 			}
 		}
@@ -62,12 +62,14 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 		delegate.ExecuteIfBound(data);
 	});
 
-	Websocket->OnConnectionError().AddLambda([delegate](const FString& errorMessage) -> void {
+	Websocket->OnConnectionError().AddLambda([delegate, this](const FString& errorMessage) -> void {
 		// This will run if the connection failed. Check Error to see what happened.
-		FWebsocketConnectResponseData data;
-		data.error = true;
-		data.errorMessage = errorMessage;
-		delegate.ExecuteIfBound(data);
+		if (!isReconnection) {
+			FWebsocketConnectResponseData data;
+			data.error = true;
+			data.errorMessage = errorMessage;
+			delegate.ExecuteIfBound(data);
+		}
 	});
 
 	Websocket->OnClosed().AddLambda([this](int32 StatusCode, const FString& Reason, bool bWasClean) -> void {
@@ -75,7 +77,8 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 		// Because of an error or a call to Socket->Close().
 		if (!bWasClean)
 		{
-			// Try to reconnect 
+			// Try to reconnect, set this flag so we don't call the delegates anymore
+			isReconnection = true;
 			Websocket->Connect();
 		}
 	});
@@ -88,8 +91,7 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 
 			// Only care about confirmation websocket events
 			auto topic = response->GetStringField("topic");
-			if (topic == "confirmation")
-			{
+			if (topic == "confirmation") {
 				auto message_json = response->GetObjectField("message");
 
 				FWebsocketConfirmationResponseData data;
@@ -108,8 +110,7 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 
 				auto subtype_str = block_json->GetStringField ("subtype");
 				// If there's no subtype, it means it's not a state block
-				if (!subtype_str.IsEmpty ())
-				{
+				if (!subtype_str.IsEmpty ()) {
 					FSubtype subtype;
 					if (subtype_str == "send") {
 						subtype = FSubtype::send;
@@ -128,6 +129,9 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 
 					onResponse.Broadcast (data);
 				}
+				else {
+					UE_LOG (LogTemp, Warning, TEXT("Receiving legacy confirmation callbacks, node is likely not synced yet so some operations will not work."));
+				}
 			}
 		}
 	});
@@ -142,57 +146,58 @@ void UNanoWebsocket::Connect (const FString &wsURL, FWebsocketConnectedDelegate 
 	}, 	5.0f, true, 5.f);
 }
 
-/*
-void UNanoWebsocket::WatchAccount(const FString& account)
-{
-	// Create JSON
-	FWatchAccountRequestData watchAccount;
-	watchAccount.account = account;
-	Websocket->SendText(MakeOutputString (watchAccount);
-}*/
-
 void UNanoWebsocket::RegisterAccount(const FString& account)
 {
-	{
-		FScopeLock lk(&mutex);
-		registeredAccounts.Emplace (account);
-	}
-	if (!Websocket->IsConnected()) {
-		// Don't send if we're not connected.
-		return;
-	}
+	FScopeLock lk(&mutex);
+	auto val = registeredAccounts.Find (account);
+	if (val != nullptr) {
+		// Just increment the number of listeners
+		++*val;
+	} else {
+		registeredAccounts.Emplace (account, 1);
+		lk.Unlock ();
+		if (!Websocket->IsConnected()) {
+			// Don't send if we're not connected.
+			return;
+		}
 
-	// Create JSON
-	FRegisterAccountRequestData registerAccount;
-	registerAccount.account = account;
-	Websocket->Send(MakeOutputString (registerAccount));
+		// Create JSON
+		FRegisterAccountRequestData registerAccount;
+		registerAccount.account = account;
+		Websocket->Send(MakeOutputString (registerAccount));
+	}
 }
 
-void UNanoWebsocket::UnregisterAccount(const FString& account)
-{
-	{
-		FScopeLock lk(&mutex);
-		registeredAccounts.Remove (account);
+void UNanoWebsocket::UnregisterAccount(const FString& account) {
+	FScopeLock lk(&mutex);
+	auto val = registeredAccounts.Find (account);
+	if (val) {
+		if (*val > 1) {
+			--*val;
+		} else {
+			registeredAccounts.Remove (account);
+			lk.Unlock ();
+
+			if (!Websocket->IsConnected()) {
+				// Don't send if we're not connected.
+				return;
+			}
+
+			// Create JSON
+			FUnRegisterAccountRequestData unregisterAccount;
+			unregisterAccount.account = account;
+
+			TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(unregisterAccount);
+			FString OutputString;
+			TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&OutputString);
+			FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
+
+			Websocket->Send(OutputString);
+		}
 	}
-	if (!Websocket->IsConnected()) {
-		// Don't send if we're not connected.
-		return;
-	}
-
-	// Create JSON
-	FUnRegisterAccountRequestData unregisterAccount;
-	unregisterAccount.account = account;
-
-	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(unregisterAccount);
-	FString OutputString;
-	TSharedRef<TJsonWriter<>> JsonWriter = TJsonWriterFactory<>::Create(&OutputString);
-	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), JsonWriter);
-
-	Websocket->Send(OutputString);
 }
 
 // Do not mix this websocket object
-void UNanoWebsocket::ListenAllConfirmations()
-{
+void UNanoWebsocket::ListenAllConfirmations() {
 	Websocket->Send("listen_all");
 }
