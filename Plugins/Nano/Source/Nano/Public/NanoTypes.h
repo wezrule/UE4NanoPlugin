@@ -322,6 +322,17 @@ struct NANO_API FAutomateResponseData {
 	bool error {false};
 };
 
+USTRUCT (BlueprintType)
+struct NANO_API FMakeBlockResponseData {
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MakeBlock")
+	FBlock block;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MakeBlock")
+	bool error {false};
+};
+
 DECLARE_DYNAMIC_DELEGATE_OneParam(FGetBalanceResponseReceivedDelegate, FGetBalanceResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWorkGenerateResponseReceivedDelegate, FWorkGenerateResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FProcessResponseReceivedDelegate, FProcessResponseData, data);
@@ -330,6 +341,8 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FAccountFrontierResponseReceivedDelegate, FAcc
 DECLARE_DYNAMIC_DELEGATE_OneParam(FPendingResponseReceivedDelegate, FPendingResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FBlockConfirmedResponseReceivedDelegate, FBlockConfirmedResponseData, data);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FAutomateResponseReceivedDelegate, FAutomateResponseData, data);
+
+DECLARE_DYNAMIC_DELEGATE_OneParam(FMakeBlockDelegate, FMakeBlockResponseData, data);
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWatchAccountReceivedDelegate, FAutomateResponseData, data);
 
@@ -345,7 +358,6 @@ struct NANO_API FSendArgs {
 	FString balance;
 	FString frontier;
 	FString representative;
-	TFunction<void(FProcessResponseData)> delegate;
 };
 
 inline FString BytesToStringFixed(const uint8 *In, int32 Count)

@@ -104,6 +104,9 @@ public:
 	void SendWaitConfirmation (FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void SendWaitConfirmationBlock (FProcessResponseReceivedDelegate delegate, FBlock block);
+
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Automate(FAutomateResponseReceivedDelegate delegate, FString const& private_key, UNanoWebsocket* websocket);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
@@ -135,6 +138,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void ListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount);
+
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void MakeSendBlock (FMakeBlockDelegate delegate, FString const & prvKey, FString const & amount, FString const& destination_account);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	FString rpcUrl;
@@ -183,8 +189,10 @@ private:
 
 	void Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate);
 
-	void RegisterBlockListener (std::string const & account, FProcessResponseData const & process_response_data, FProcessResponseReceivedDelegate delegate);
-	void AutomateRegisterReceiveBlockListener (std::string const & account, FAutomateResponseData const & automateResponseData, FAutomateResponseReceivedDelegate delegate);
+	template<class T, class T1, class T2>
+	void RegisterBlockListener (std::string const & account, FCriticalSection * mutex, T const & responseData, std::unordered_map<std::string, T1> & blockListener, T2 delegate);
+
+	void MakeSendBlock (FString const & prvKey, FString const & amount, FString const& destination_account, TFunction<void(FMakeBlockResponseData)> const& delegate);
 
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account);
 	static FPendingResponseData GetPendingResponseData(RESPONSE_PARAMETERS);

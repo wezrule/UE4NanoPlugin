@@ -35,6 +35,49 @@
 
 #define RESPONSE_ARGUMENTS request, response, wasSuccessful
 
+template<class T, class T1, class T2>
+void UNanoManager::RegisterBlockListener (std::string const & account, FCriticalSection * mutex, T const & responseData, std::unordered_map<std::string, T1> & blockListener, T2 delegate)
+{
+	// Check we are listening for websocket events for this account
+	{
+		FScopeLock keyLk (&keyDelegateMutex);
+		FScopeLock watcherLk (&watchersMutex);
+		check (keyDelegateMap.find (account) != keyDelegateMap.cend () || watchers.Find (account.c_str ()));
+	}
+	// Also check that we aren't specifically listening for this send block already
+	FScopeLock lk (mutex);
+	check (blockListener.find (account) == blockListener.cend ());
+
+	auto blockHashStdStr = std::string (TCHAR_TO_UTF8 (*responseData.hash));
+
+	// Keep a mapping of automatic listening delegates
+	auto listenDelegate = &(blockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(delegate, responseData)).first->second);
+
+	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+	GetWorld()->GetTimerManager().SetTimer(listenDelegate->timerHandle, [this, mutex, &blockListener, hash = listenDelegate->data.hash]() {
+
+		FScopeLock lk (mutex);
+		auto it = blockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
+		if (it != blockListener.cend ()) {
+			// Get block_info, if confirmed call delegate, remove timer
+			BlockConfirmed(it->second.data.hash, [this, mutex, &blockListener, hash = it->second.data.hash](RESPONSE_PARAMETERS) {
+				auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
+				if (block_confirmed_data.confirmed) {
+					FScopeLock lk (mutex);
+					auto it = blockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
+					if (it != blockListener.cend ()) {
+						auto delegate = it->second.delegate;
+						GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
+						blockListener.erase (it);
+						lk.Unlock ();
+						delegate.ExecuteIfBound (it->second.data);
+					}
+				}
+			});
+		}
+	}, 5.0f, true, 5.0f);
+}
+
 void UNanoManager::SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket) {
 	if (!websocket->onResponse.Contains (this, "OnConfirmationReceiveMessage"))
 	{
@@ -161,7 +204,7 @@ void UNanoManager::ProcessWaitConfirmation (FProcessResponseReceivedDelegate del
 	Process (block, [this, block, delegate](RESPONSE_PARAMETERS) {
 		auto process_response_data = GetProcessResponseData(RESPONSE_ARGUMENTS);
 		if (!process_response_data.error) {
-			RegisterBlockListener (TCHAR_TO_UTF8(*block.account), process_response_data, delegate);
+			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (TCHAR_TO_UTF8(*block.account), &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
 		} else {
 			delegate.ExecuteIfBound (process_response_data);
 		}		
@@ -366,7 +409,7 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 							FAutomateResponseReceivedDelegate delegate = it->second.delegate;
 							lk.Unlock ();
 
-							AutomateRegisterReceiveBlockListener (TCHAR_TO_UTF8(*automateData.account), automateData, delegate);
+							RegisterBlockListener<FAutomateResponseData, ReceiveDelegate, FAutomateResponseReceivedDelegate> (TCHAR_TO_UTF8(*automateData.account), &receiveBlockListenerMutex, automateData, receiveBlockListener, delegate);
 
 							// If there are any more pending, then redo this process
 							if (pendingBlocks.Num() > 0) {
@@ -541,10 +584,11 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 				if (it1 != sendBlockListener.cend ()) {
 					// Call delegate now that the send has been confirmed
 					auto delegate = it1->second.delegate;
+					auto processResponseData = it1->second.data;
 					GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
 					sendBlockListener.erase (it1);
-					lk.Unlock ();
-					delegate.ExecuteIfBound (it1->second.data);
+					lk.Unlock (); 
+					delegate.ExecuteIfBound (processResponseData);
 				}
 			}
 		}
@@ -596,87 +640,16 @@ void UNanoManager::BlockConfirmed(FString hash, TFunction<void(RESPONSE_PARAMETE
 	MakeRequest(GetBlockConfirmedJsonObject(hash), delegate);
 }
 
-void UNanoManager::AutomateRegisterReceiveBlockListener (std::string const & account, FAutomateResponseData const & automateResponseData, FAutomateResponseReceivedDelegate delegate) {
-	// Check we are listening for websocket events for this account
-	{
-		FScopeLock keyLk (&keyDelegateMutex);
-		FScopeLock watcherLk (&watchersMutex);
-		check (keyDelegateMap.find (account) != keyDelegateMap.cend () || watchers.Find (account.c_str ()));
-	}
-	// Also check that we aren't specifically listening for this send block already
-	FScopeLock lk (&receiveBlockListenerMutex);
-	check (receiveBlockListener.find (account) == receiveBlockListener.cend ());
+void UNanoManager::SendWaitConfirmationBlock (FProcessResponseReceivedDelegate delegate, FBlock block) {
 
-	auto blockHashStdStr = std::string (TCHAR_TO_UTF8 (*automateResponseData.hash));
-
-	// Keep a mapping of automatic listening delegates
-	auto receiveDelegate = &(receiveBlockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(delegate, automateResponseData)).first->second);
-
-	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-	GetWorld()->GetTimerManager().SetTimer(receiveDelegate->timerHandle, [this, hash = receiveDelegate->data.hash]() {
-
-		FScopeLock lk (&receiveBlockListenerMutex);
-		auto it = receiveBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
-		if (it != receiveBlockListener.cend ()) {
-			// Get block_info, if confirmed call delegate, remove timer
-			BlockConfirmed(it->second.data.hash, [this, hash = it->second.data.hash](RESPONSE_PARAMETERS) {
-				auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
-				if (block_confirmed_data.confirmed) {
-					FScopeLock lk (&receiveBlockListenerMutex);
-					auto it = receiveBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
-					if (it != receiveBlockListener.cend ()) {
-						auto delegate = it->second.delegate;
-						GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
-						receiveBlockListener.erase (it);
-						lk.Unlock ();
-						delegate.ExecuteIfBound (it->second.data);
-					}
-				}
-			});
+	Process(block, [this, delegate, account = nano::account (TCHAR_TO_UTF8(*block.link)).to_account ()](RESPONSE_PARAMETERS){
+		auto process_response_data = GetProcessResponseData(RESPONSE_ARGUMENTS);
+		if (!process_response_data.error) {
+			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (account, &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
+		} else {
+			delegate.ExecuteIfBound (process_response_data);
 		}
-	}, 5.0f, true, 5.0f);
-}
-
-void UNanoManager::RegisterBlockListener (std::string const & account, FProcessResponseData const & process_response_data, FProcessResponseReceivedDelegate delegate) {
-
-	// Check we are listening for websocket events for this account
-	{
-		FScopeLock keyLk (&keyDelegateMutex);
-		FScopeLock watcherLk (&watchersMutex);
-		check (keyDelegateMap.find (account) != keyDelegateMap.cend () || watchers.Find (account.c_str ()));
-	}
-	// Also check that we aren't specifically listening for this send block already
-	FScopeLock lk (&sendBlockListenerMutex);
-	check (sendBlockListener.find (account) == sendBlockListener.cend ());
-
-	auto blockHashStdStr = std::string (TCHAR_TO_UTF8 (*process_response_data.hash));
-
-	// Keep a mapping of automatic listening delegates
-	auto sendDelegate = &(sendBlockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(delegate, process_response_data)).first->second);
-
-	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-	GetWorld()->GetTimerManager().SetTimer(sendDelegate->timerHandle, [this, hash = sendDelegate->data.hash]() {
-
-		FScopeLock lk (&sendBlockListenerMutex);
-		auto it = sendBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
-		if (it != sendBlockListener.cend ()) {
-			// Get block_info, if confirmed call delegate, remove timer
-			BlockConfirmed(it->second.data.hash, [this, hash = it->second.data.hash](RESPONSE_PARAMETERS) {
-				auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
-				if (block_confirmed_data.confirmed) {
-					FScopeLock lk (&sendBlockListenerMutex);
-					auto it = sendBlockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
-					if (it != sendBlockListener.cend ()) {
-						auto delegate = it->second.delegate;
-						GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
-						sendBlockListener.erase (it);
-						lk.Unlock ();
-						delegate.ExecuteIfBound (it->second.data);
-					}
-				}
-			});
-		}
-	}, 5.0f, true, 5.0f);
+	});
 }
 
 // This will only call the delegate after the send has been confirmed by the network. Requires a websocket connection
@@ -690,7 +663,7 @@ void UNanoManager::SendWaitConfirmation (FProcessResponseReceivedDelegate delega
 			nano::raw_key prv_key;
 			prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
 			auto pub_key = nano::pub_key(prv_key.data);
-			RegisterBlockListener (pub_key.to_account (), process_response_data, delegate);
+			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (pub_key.to_account (), &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
 		}
 		else
 		{
@@ -701,6 +674,35 @@ void UNanoManager::SendWaitConfirmation (FProcessResponseReceivedDelegate delega
 
 void UNanoManager::Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate) {
 
+	MakeSendBlock (private_key, amount, account, [delegate, this](FMakeBlockResponseData data) {
+		if (!data.error) {
+			// Process the process
+			Process(data.block, [delegate](RESPONSE_PARAMETERS) {
+				delegate (GetProcessResponseData(RESPONSE_ARGUMENTS));
+			});
+		} else {
+			FProcessResponseData processData;
+			processData.error = true;
+			delegate (processData);
+		}
+	});
+}
+
+// The will call the delegate when a send has been published, but not necessarily confirmed by the network yet, for ultimate security use SendWaitConfirmation.
+void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
+	Send(private_key, account, amount, [this, delegate](const FProcessResponseData& data) {
+		delegate.ExecuteIfBound(data);
+	});
+}
+
+void UNanoManager::MakeSendBlock(FMakeBlockDelegate delegate, FString const & prvKey, FString const & amount, FString const& destination_account) {
+	MakeSendBlock(prvKey, amount, destination_account, [this, delegate](const FMakeBlockResponseData& data) {
+		delegate.ExecuteIfBound(data);
+	});
+}
+
+void UNanoManager::MakeSendBlock (FString const & private_key, FString const & amount, FString const& destination_account, TFunction<void(FMakeBlockResponseData)> const& delegate) {
+
 	// Need to construct the block myself
 	nano::raw_key prv_key;
 	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
@@ -708,16 +710,15 @@ void UNanoManager::Send(FString const& private_key, FString const& account, FStr
 	auto pub_key = nano::pub_key(prv_key.data);
 
 	nano::account acc;
-	acc.decode_account (TCHAR_TO_UTF8(*account));
+	acc.decode_account (TCHAR_TO_UTF8(*destination_account));
 
 	FSendArgs sendArgs;
 	sendArgs.private_key = private_key;
 	sendArgs.account = acc.to_string ().c_str ();
 	sendArgs.amount = amount;
-	sendArgs.delegate = delegate;
 
 	// Get the frontier
-	AccountFrontier(pub_key.to_account().c_str(), [this, sendArgs](RESPONSE_PARAMETERS) mutable {
+	AccountFrontier(pub_key.to_account().c_str(), [this, sendArgs, delegate](RESPONSE_PARAMETERS) mutable {
 
 		auto accountFrontierResponseData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
 		if (!accountFrontierResponseData.error) {
@@ -726,7 +727,7 @@ void UNanoManager::Send(FString const& private_key, FString const& account, FStr
 			sendArgs.representative = accountFrontierResponseData.representative;
 
 			// Generate work
-			WorkGenerate(accountFrontierResponseData.hash, [this, sendArgs](RESPONSE_PARAMETERS) {
+			WorkGenerate(accountFrontierResponseData.hash, [this, sendArgs, delegate](RESPONSE_PARAMETERS) {
 
 				auto workGenerateResponseData = GetWorkGenerateResponseData(RESPONSE_ARGUMENTS);
 				if (workGenerateResponseData.hash != "0") {
@@ -754,24 +755,16 @@ void UNanoManager::Send(FString const& private_key, FString const& account, FStr
 					block.representative = sendArgs.representative;
 					block.work = workGenerateResponseData.work;
 
-					// Process the process
-					Process(block, [d = sendArgs.delegate](RESPONSE_PARAMETERS){
-						d (GetProcessResponseData(RESPONSE_ARGUMENTS));
-					});
+					FMakeBlockResponseData makeBlockData;
+					makeBlockData.block = block;
+					delegate (makeBlockData);
 				}
 			});
 		} else {
-			FProcessResponseData processData;
-			processData.error = true;
-			sendArgs.delegate (processData);
+			FMakeBlockResponseData makeBlockData;
+			makeBlockData.error = true;
+			delegate (makeBlockData);
 		}
-	});
-}
-
-// The will call the delegate when a send has been published, but not necessarily confirmed by the network yet, for ultimate security use SendWaitConfirmation.
-void UNanoManager::Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
-	Send(private_key, account, amount, [this, delegate](const FProcessResponseData& data) {
-		delegate.ExecuteIfBound(data);
 	});
 }
 
