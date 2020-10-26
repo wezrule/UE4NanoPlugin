@@ -46,6 +46,14 @@ bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 	nano = UNanoBlueprintLibrary::RawToNano (raw);
 	TestEqual (TEXT ("10^28raw to Nano"), nano, TEXT ("0.01"));
 
+	raw = FString (TEXT ("100000000000000000000000000"));
+	nano = UNanoBlueprintLibrary::RawToNano (raw);
+	TestEqual (TEXT ("10^26raw to Nano"), nano, TEXT ("0.0001"));
+
+	raw = FString (TEXT ("100"));
+	nano = UNanoBlueprintLibrary::RawToNano (raw);
+	TestEqual (TEXT ("100 raw to Nano"), nano, TEXT ("0.0000000000000000000000000001"));
+
 	raw = TEXT ("1");
 	nano = UNanoBlueprintLibrary::RawToNano (raw);
 	TestEqual (TEXT ("1 raw to Nano"), nano, TEXT ("0.000000000000000000000000000001"));

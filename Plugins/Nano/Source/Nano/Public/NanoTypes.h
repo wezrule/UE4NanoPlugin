@@ -17,6 +17,9 @@ struct NANO_API FGetBalanceRequestData {
 	FString account;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GetBalance")
+	bool include_only_confirmed{true};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GetBalance")
 	FString action {"account_balance"};
 };
 
@@ -58,7 +61,7 @@ struct NANO_API FWorkGenerateResponseData {
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WorkGenerate")
 	FString work;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GetBalance")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WorkGenerate")
 	bool error {false};
 };
 
@@ -71,6 +74,12 @@ struct NANO_API FAccountFrontierRequestData {
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
 	FString representative{"true"};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
+	FString pending{"true"};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
+	bool include_only_confirmed{true};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
 	FString action{"account_info"};
@@ -117,6 +126,9 @@ struct NANO_API FPendingRequestData {
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
 	FString count {"5"};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
+	FString threshold {"0"};
 };
 
 USTRUCT(BlueprintType)

@@ -33,44 +33,45 @@
 		return Data; \
 	}
 
-#define RESPONSE_ARGUMENTS request, response, wasSuccessful
+namespace
+{
+	void fireAutomateDelegateError(FAutomateResponseReceivedDelegate delegate) {
+		FAutomateResponseData data;
+		data.error = true;
+		delegate.ExecuteIfBound(data);
+	}
+}
 
-template<class T, class T1, class T2>
-void UNanoManager::RegisterBlockListener (std::string const & account, FCriticalSection * mutex, T const & responseData, std::unordered_map<std::string, T1> & blockListener, T2 delegate)
+template<class T, class T1>
+void UNanoManager::RegisterBlockListener (std::string const & account, T const & responseData, std::unordered_map<std::string, BlockListenerDelegate<T, T1>> & blockListener, T1 delegate)
 {
 	// Check we are listening for websocket events for this account
 	{
-		FScopeLock keyLk (&keyDelegateMutex);
-		FScopeLock watcherLk (&watchersMutex);
 		check (keyDelegateMap.find (account) != keyDelegateMap.cend () || watchers.Find (account.c_str ()));
 	}
 	// Also check that we aren't specifically listening for this send block already
-	FScopeLock lk (mutex);
 	check (blockListener.find (account) == blockListener.cend ());
 
 	auto blockHashStdStr = std::string (TCHAR_TO_UTF8 (*responseData.hash));
 
 	// Keep a mapping of automatic listening delegates
-	auto listenDelegate = &(blockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(delegate, responseData)).first->second);
+	auto listenDelegate = &(blockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(responseData, delegate)).first->second);
 
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-	GetWorld()->GetTimerManager().SetTimer(listenDelegate->timerHandle, [this, mutex, &blockListener, hash = listenDelegate->data.hash]() {
+	GetWorld()->GetTimerManager().SetTimer(listenDelegate->timerHandle, [this, &blockListener, hash = listenDelegate->data.hash]() {
 
-		FScopeLock lk (mutex);
 		auto it = blockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
 		if (it != blockListener.cend ()) {
 			// Get block_info, if confirmed call delegate, remove timer
-			BlockConfirmed(it->second.data.hash, [this, mutex, &blockListener, hash = it->second.data.hash](RESPONSE_PARAMETERS) {
-				auto block_confirmed_data = GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS);
+			BlockConfirmed(it->second.data.hash, [this, &blockListener, hash = it->second.data.hash](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+				auto block_confirmed_data = GetBlockConfirmedResponseData(request, response, wasSuccessful);
 				if (block_confirmed_data.confirmed) {
-					FScopeLock lk (mutex);
 					auto it = blockListener.find (std::string (TCHAR_TO_UTF8 (*hash)));
 					if (it != blockListener.cend ()) {
 						auto delegate = it->second.delegate;
 						GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
-						blockListener.erase (it);
-						lk.Unlock ();
 						delegate.ExecuteIfBound (it->second.data);
+						blockListener.erase (it);
 					}
 				}
 			});
@@ -91,8 +92,8 @@ void UNanoManager::GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate
 	getBalanceRequestData.account = nanoAddress;
 
 	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(getBalanceRequestData);
-	MakeRequest(JsonObject, [this, delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetBalanceResponseData(RESPONSE_ARGUMENTS));
+	MakeRequest(JsonObject, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetBalanceResponseData(request, response, wasSuccessful));
 	});
 }
 
@@ -103,29 +104,31 @@ TSharedPtr<FJsonObject> UNanoManager::GetWorkGenerateJsonObject(FString hash) {
 }
 
 void UNanoManager::WorkGenerate(FWorkGenerateResponseReceivedDelegate delegate, FString hash) {
-	WorkGenerate(hash, [delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetWorkGenerateResponseData(RESPONSE_ARGUMENTS));
+	WorkGenerate(hash, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetWorkGenerateResponseData(request, response, wasSuccessful));
 	});
 }
 
-void UNanoManager::WorkGenerate(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& d) {
+void UNanoManager::WorkGenerate(FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d) {
 	MakeRequest(GetWorkGenerateJsonObject(hash), d);
 }
 
-TSharedPtr<FJsonObject> UNanoManager::GetPendingJsonObject(FString account) {
+TSharedPtr<FJsonObject> UNanoManager::GetPendingJsonObject(FString account, FString threshold, int32 maxCount) {
 	FPendingRequestData pendingRequestData;
 	pendingRequestData.account = account;
+	pendingRequestData.count = FString::FromInt (maxCount);
+	pendingRequestData.threshold = threshold;
 	return FJsonObjectConverter::UStructToJsonObject(pendingRequestData);
 }
 
-void UNanoManager::Pending(FPendingResponseReceivedDelegate delegate, FString account) {
-	Pending(account, [delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetPendingResponseData(RESPONSE_ARGUMENTS));
+void UNanoManager::Pending(FPendingResponseReceivedDelegate delegate, FString account, FString threshold, int32 maxCount) {
+	Pending(account, threshold, maxCount, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetPendingResponseData(request, response, wasSuccessful));
 	});
 }
 
-void UNanoManager::Pending(FString account, TFunction<void(RESPONSE_PARAMETERS)> const& d) {
-	MakeRequest(GetPendingJsonObject(account), d);
+void UNanoManager::Pending(FString account, FString threshold, int32 maxCount, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d) {
+	MakeRequest(GetPendingJsonObject(account, threshold, maxCount), d);
 }
 
 TSharedPtr<FJsonObject> UNanoManager::GetAccountFrontierJsonObject(FString const& account) {
@@ -141,22 +144,22 @@ TSharedPtr<FJsonObject> UNanoManager::GetBlockConfirmedJsonObject(FString const&
 }
 
 void UNanoManager::AccountFrontier(FAccountFrontierResponseReceivedDelegate delegate, FString account) {
-	AccountFrontier(account, [this, delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetAccountFrontierResponseData(RESPONSE_ARGUMENTS));
+	AccountFrontier(account, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetAccountFrontierResponseData(request, response, wasSuccessful));
 	});
 }
 
-void UNanoManager::AccountFrontier(FString account, TFunction<void(RESPONSE_PARAMETERS)> const& delegate) {
+void UNanoManager::AccountFrontier(FString account, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate) {
 	MakeRequest(GetAccountFrontierJsonObject(account), delegate);
 }
 
 void UNanoManager::Process(FProcessResponseReceivedDelegate delegate, FBlock block) {
-	Process(block, [delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetProcessResponseData(RESPONSE_ARGUMENTS));
+	Process(block, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetProcessResponseData(request, response, wasSuccessful));
 	});
 }
 
-void UNanoManager::Process(FBlock block, TFunction<void(RESPONSE_PARAMETERS)> const& delegate) {
+void UNanoManager::Process(FBlock block, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate) {
 
 	nano::account account;
 	account.decode_account(TCHAR_TO_UTF8(*block.account));
@@ -201,25 +204,25 @@ void UNanoManager::Process(FBlock block, TFunction<void(RESPONSE_PARAMETERS)> co
 void UNanoManager::ProcessWaitConfirmation (FProcessResponseReceivedDelegate delegate, FBlock block) {
 
 	// Register a block hash listener which will fire the delegate and remove it
-	Process (block, [this, block, delegate](RESPONSE_PARAMETERS) {
-		auto process_response_data = GetProcessResponseData(RESPONSE_ARGUMENTS);
+	Process (block, [this, block, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		auto process_response_data = GetProcessResponseData(request, response, wasSuccessful);
 		if (!process_response_data.error) {
-			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (TCHAR_TO_UTF8(*block.account), &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
+			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate> (TCHAR_TO_UTF8(*block.account), process_response_data, sendBlockListener, delegate);
 		} else {
 			delegate.ExecuteIfBound (process_response_data);
 		}		
 	});
 }
 
-// Development only!
+// Used only be used for development if the server supports it (unless you want a faucet).
 void UNanoManager::RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress) {
 	// Ask server for Nano
 	FRequestNanoData requestNanoData;
 	requestNanoData.account = nanoAddress;
 
 	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(requestNanoData);
-	MakeRequest(JsonObject, [this, delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetRequestNanoData(RESPONSE_ARGUMENTS));
+	MakeRequest(JsonObject, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetRequestNanoData(request, response, wasSuccessful));
 	});
 }
 
@@ -228,7 +231,6 @@ int32 UNanoManager::Watch(const FWatchAccountReceivedDelegate& delegate, FString
 	websocket->RegisterAccount(account);
 
 	// Keep a mapping of automatic listening delegates
-	FScopeLock lk (&watchersMutex);
 	auto val = watchers.Find (account);
 	if (val) {
 		val->Add (watcherId, delegate);
@@ -242,19 +244,17 @@ int32 UNanoManager::Watch(const FWatchAccountReceivedDelegate& delegate, FString
 void UNanoManager::Unwatch(const FString& account, const int32& id, UNanoWebsocket* websocket) {
 
 	// Check this id exists before unwatching
-	FScopeLock lk (&watchersMutex);
 	auto map = watchers.Find (account);
 	if (map) {
 		auto delegate = map->Find (id);
 		if (delegate) {
 			map->Remove (id);
-			lk.Unlock ();
 			websocket->UnregisterAccount(account);
 		}
 	}
 }
 
-void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString const& private_key, UNanoWebsocket* websocket) {
+void UNanoManager::AutomaticallyPocketRegister(FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& private_key, FString minimum) {
 	check (!private_key.IsEmpty ());
 	nano::raw_key prv_key;
 	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
@@ -262,79 +262,61 @@ void UNanoManager::Automate(FAutomateResponseReceivedDelegate delegate, FString 
 	auto pub_key = nano::pub_key(prv_key.data);
 
 	// Check you haven't already added it
-	FScopeLock lk (&keyDelegateMutex);
 	check (keyDelegateMap.find (pub_key.to_account()) == keyDelegateMap.cend ());
 
 	websocket->RegisterAccount(pub_key.to_account().c_str());
 
 	// Keep a mapping of automatic listening delegates
-	auto prvKeyAutomateDelegate = &(keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(pub_key.to_account()), std::forward_as_tuple(private_key, delegate)).first->second);
+	auto prvKeyAutomateDelegate = &(keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(pub_key.to_account()), std::forward_as_tuple(private_key, delegate, minimum)).first->second);
 
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-	GetWorld()->GetTimerManager().SetTimer(prvKeyAutomateDelegate->timerHandle, [this, pub_key]() {
+	GetWorld()->GetTimerManager().SetTimer(prvKeyAutomateDelegate->timerHandle, [this, pub_key, minimum]() {
 
-		FScopeLock lk (&keyDelegateMutex);
 		auto it = keyDelegateMap.find (pub_key.to_account());
 		if (it != keyDelegateMap.end ())
 		{
-			AutomatePocketPendingUtility(pub_key.to_account().c_str());
+			AutomatePocketPendingUtility(pub_key.to_account().c_str(), minimum);
 		}
 	}, 5.0f, true, 1.f);
 }
 
-void UNanoManager::AutomateUnregister(const FString& account, UNanoWebsocket* websocket) {
+void UNanoManager::AutomaticallyPocketUnregister(const FString& account, UNanoWebsocket* websocket) {
 	// Remove timer (has to be the exact one, doesn't work if it's been copied.
-	FScopeLock lk (&keyDelegateMutex);
 	auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
 	if (it != keyDelegateMap.cend ()) {
 		if (!it->second.prv_key.IsEmpty ()) {
 			GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
 		}
 		keyDelegateMap.erase(it);
-		lk.Unlock ();
 		websocket->UnregisterAccount(account);
 	}
 }
 
-namespace
-{
-	void fireAutomateDelegateError(FAutomateResponseReceivedDelegate delegate) {
-		FAutomateResponseData data;
-		data.error = true;
-		delegate.ExecuteIfBound(data);
-	}
-}
+void UNanoManager::AutomatePocketPendingUtility(const FString& account, const FString& minimum) {
+	AccountFrontier(account, [this, account, minimum](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 
-void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
-	AccountFrontier(account, [this, account](RESPONSE_PARAMETERS) {
-
-		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
+		auto frontierData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 		if (!frontierData.error) {
-			Pending(account, [this, frontierData](RESPONSE_PARAMETERS) {
-				auto pendingData = GetPendingResponseData(RESPONSE_ARGUMENTS);
+			const auto numPending = 5;
+			Pending(account, minimum, numPending, [this, frontierData](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+				auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
 				if (!pendingData.error) {
 					if (pendingData.blocks.Num() > 0) {
 						AutomateWorkGenerateLoop(frontierData, pendingData.blocks);
 					}
 				} else {
-					FScopeLock lk (&keyDelegateMutex);
 					auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
 					if (it != keyDelegateMap.end ())
 					{
-						FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-						lk.Unlock ();
-						fireAutomateDelegateError(delegate);
+						fireAutomateDelegateError(it->second.delegate);
 					}
 				}
 			});
 		} else {
-			FScopeLock lk (&keyDelegateMutex);
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
 			if (it != keyDelegateMap.end ())
 			{
-				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-				lk.Unlock ();
-				fireAutomateDelegateError(delegate);
+				fireAutomateDelegateError(it->second.delegate);
 			}
 		}
 	});
@@ -342,9 +324,9 @@ void UNanoManager::AutomatePocketPendingUtility(const FString& account) {
 
 void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks) {
 
-	WorkGenerate(frontierData.hash, [this, frontierData, pendingBlocks](RESPONSE_PARAMETERS) mutable {
-		auto workData = GetWorkGenerateResponseData(RESPONSE_ARGUMENTS);
-		// prvKeyAutomateDelegate_receiver could be deleted, this is just a pointer
+	WorkGenerate(frontierData.hash, [this, frontierData, pendingBlocks](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
+		auto workData = GetWorkGenerateResponseData(request, response, wasSuccessful);
+
 		if (!workData.error && pendingBlocks.Num() != 0) {
 			// Create the receive block
 			nano::account account;
@@ -376,7 +358,6 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 				block.previous = frontierData.hash;
 			}
 
-			FScopeLock lk (&keyDelegateMutex);
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
 			if (it != keyDelegateMap.end ())
 			{
@@ -395,21 +376,18 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 				automateData.account = block.account;
 				automateData.representative= block.representative;
 
-				Process(block, [this, pendingBlocks, automateData](RESPONSE_PARAMETERS) mutable {
-					auto processData = GetProcessResponseData(RESPONSE_ARGUMENTS);
+				Process(block, [this, pendingBlocks, automateData](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
+					auto processData = GetProcessResponseData(request, response, wasSuccessful);
 					if (!processData.error) {
 						automateData.frontier = processData.hash;
 						automateData.hash = processData.hash;
 
-						FScopeLock lk (&keyDelegateMutex);
 						auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*automateData.account));
 						if (it != keyDelegateMap.end ())
 						{
 							// Fire it back to the user
 							FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-							lk.Unlock ();
-
-							RegisterBlockListener<FAutomateResponseData, ReceiveDelegate, FAutomateResponseReceivedDelegate> (TCHAR_TO_UTF8(*automateData.account), &receiveBlockListenerMutex, automateData, receiveBlockListener, delegate);
+							RegisterBlockListener<FAutomateResponseData, FAutomateResponseReceivedDelegate> (TCHAR_TO_UTF8(*automateData.account), automateData, receiveBlockListener, delegate);
 
 							// If there are any more pending, then redo this process
 							if (pendingBlocks.Num() > 0) {
@@ -425,32 +403,25 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 						}
 					}
 					else {
-						FScopeLock lk (&keyDelegateMutex);
 						auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*automateData.account));
 						if (it != keyDelegateMap.end ())
 						{
-							FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-							lk.Unlock ();
-							fireAutomateDelegateError(delegate);
+							fireAutomateDelegateError(it->second.delegate);
 						}
 					}
 				});
 			}
 		}
 		else {
-			FScopeLock lk (&keyDelegateMutex);
 			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*frontierData.account));
 			if (it != keyDelegateMap.end ())
 			{
-				FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-				lk.Unlock ();
-				fireAutomateDelegateError(delegate);
+				fireAutomateDelegateError(it->second.delegate);
 			}
 		}
 	});
 }
 
-// TODO: FAutomateResponseData is rubbish name...
 FAutomateResponseData UNanoManager::GetWebsocketResponseData (const FString& amount, const FString& hash, FString const & account, FConfType type, FAccountFrontierResponseData const & frontierData) {
 	FAutomateResponseData automateData;
 	automateData.type = type;
@@ -465,22 +436,12 @@ FAutomateResponseData UNanoManager::GetWebsocketResponseData (const FString& amo
 void UNanoManager::GetFrontierAndFireWatchers (const FString& amount, const FString& hash, FString const & account, FConfType type)
 {
 	// Get the account info and send that back along with the block that has been sent
-	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, type](RESPONSE_PARAMETERS) {
+	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, type](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 
-		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
+		auto frontierData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 
-		FScopeLock lk (&watchersMutex);
 		auto id_delegate_map = watchers.Find (TCHAR_TO_UTF8(*account));
 		if (id_delegate_map) {
-
-			// Copy all delegates
-			TArray<FWatchAccountReceivedDelegate> delegates;
-			for (auto id_delegate : *id_delegate_map)
-			{
-				delegates.Add (id_delegate.Value);
-			}
-
-			lk.Unlock ();
 
 			if (!frontierData.error) {
 
@@ -488,15 +449,15 @@ void UNanoManager::GetFrontierAndFireWatchers (const FString& amount, const FStr
 				auto automateData = GetWebsocketResponseData (amount, hash, account, type, frontierData);
 
 				// Fire it back to the user
-				for (auto delegate : delegates)
+				for (auto delegate : *id_delegate_map)
 				{
-					delegate.ExecuteIfBound(automateData);
+					delegate.Value.ExecuteIfBound(automateData);
 				}
 			} else {
 				FAutomateResponseData data;
 				data.error = true;
-				for (auto delegate : delegates) {
-					delegate.ExecuteIfBound(data);
+				for (auto delegate : *id_delegate_map) {
+					delegate.Value.ExecuteIfBound(data);
 				}
 			}
 		}
@@ -507,16 +468,12 @@ void UNanoManager::GetFrontierAndFireWatchers (const FString& amount, const FStr
 void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, FConfType type)
 {
 	// Get the account info and send that back along with the block that has been sent
-	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, type](RESPONSE_PARAMETERS) {
+	AccountFrontier(TCHAR_TO_UTF8(*account), [this, account, amount, hash, type](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 
-		auto frontierData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
+		auto frontierData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 
-		FScopeLock lk (&keyDelegateMutex);
 		auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
 		if (it != keyDelegateMap.end ()) {
-
-			FAutomateResponseReceivedDelegate delegate = it->second.delegate;
-			lk.Unlock ();
 
 			if (!frontierData.error) {
 
@@ -524,9 +481,9 @@ void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash
 				auto automateData = GetWebsocketResponseData (amount, hash, account, type, frontierData);
 
 				// Fire it back to the user
-				delegate.ExecuteIfBound(automateData);
+				it->second.delegate.ExecuteIfBound(automateData);
 			} else {
-				fireAutomateDelegateError(delegate);
+				fireAutomateDelegateError(it->second.delegate);
 			}
 		}
 	});
@@ -542,110 +499,88 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 	if (data.block.subtype == FSubtype::send) {
 
 		// Check if this is a send to an account we are watching
+		auto link_as_account = FString (nano::account (TCHAR_TO_UTF8(*data.block.link)).to_account ().c_str ()); // Convert link as hash to account
 		{
-			auto link_as_account = FString (nano::account (TCHAR_TO_UTF8(*data.block.link)).to_account ().c_str ()); // Convert link as hash to account
-			{
-				FScopeLock lk (&keyDelegateMutex);
-				auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*link_as_account));
-				if (it != keyDelegateMap.end ()) {
-					lk.Unlock ();
-					// Pocket the block
-					AutomatePocketPendingUtility(link_as_account);
+			auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*link_as_account));
+			if (it != keyDelegateMap.end ()) {
+
+				if (UNanoBlueprintLibrary::GreaterOrEqual (data.amount, it->second.minimum)) {
+					// Pocket the block, also check if there are more pending 
+					AutomatePocketPendingUtility(link_as_account, it->second.minimum);
 				}
 			}
-			{
-				FScopeLock lk (&watchersMutex);
-				auto account_watchers = watchers.Find (link_as_account);
-				if (account_watchers) {
-					lk.Unlock ();
-					// We are just watching this so return the block (after getting account frontier information)
-					GetFrontierAndFireWatchers (data.amount, data.hash, link_as_account, FConfType::send_to);
-				}
+		}
+		{
+			auto account_watchers = watchers.Find (link_as_account);
+			if (account_watchers) {
+				// We are just watching this so return the block (after getting account frontier information)
+				GetFrontierAndFireWatchers (data.amount, data.hash, link_as_account, FConfType::send_to);
 			}
 		}
 
 		// Check if this is a send from an account we are watching
-		{
-			auto account = data.block.account;
+		auto account = data.block.account;
 
-			{
-				FScopeLock lk (&keyDelegateMutex);
-				auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
-				if (it != keyDelegateMap.end ()) {
-					// This is a send from us to someone else
-					lk.Unlock ();
-					GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
-				}
+		auto it = keyDelegateMap.find (TCHAR_TO_UTF8(*account));
+		if (it != keyDelegateMap.end ()) {
+			// This is a send from us to someone else
+			GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
+		}
 
-				// If we are listening for confirmations for this send block. TODO: Generalise with receive block?
-				auto hash_std_str = std::string (TCHAR_TO_UTF8 (*data.hash));
-				FScopeLock sendBlockLk (&sendBlockListenerMutex);
-				auto it1 = sendBlockListener.find (hash_std_str);
-				if (it1 != sendBlockListener.cend ()) {
-					// Call delegate now that the send has been confirmed
-					auto delegate = it1->second.delegate;
-					auto processResponseData = it1->second.data;
-					GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
-					sendBlockListener.erase (it1);
-					lk.Unlock (); 
-					delegate.ExecuteIfBound (processResponseData);
-				}
-			}
+		// If we are listening for confirmations for this send block
+		auto hash_std_str = std::string (TCHAR_TO_UTF8 (*data.hash));
+		auto it1 = sendBlockListener.find (hash_std_str);
+		if (it1 != sendBlockListener.cend ()) {
+			// Call delegate now that the send has been confirmed
+			GetWorld()->GetTimerManager().ClearTimer(it1->second.timerHandle);
+			it1->second.delegate.ExecuteIfBound (it1->second.data);
+			sendBlockListener.erase (it1);
 		}
 
 		// Are we listening for a payment? Only one of these will be active at once
-		{
-			FScopeLock lk (&listeningPaymentMutex);
-			if (listeningPayment.delegate.IsBound ()) {
+		if (listeningPayment.delegate.IsBound ()) {
 			
-				auto account = FString (nano::account (TCHAR_TO_UTF8(*data.block.link)).to_account ().c_str ());
-				if (listeningPayment.account == account && listeningPayment.amount == data.amount)
-				{
-					auto delegate = listeningPayment.delegate;
-					lk.Unlock ();
-					delegate.ExecuteIfBound (data.hash);
-					delegate.Unbind ();		
-				}
+			if (listeningPayment.account == link_as_account && listeningPayment.amount == data.amount)
+			{
+				GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+				listeningPayment.delegate.ExecuteIfBound (data.hash);
+				listeningPayment.delegate.Unbind ();		
 			}
 		}
 	}
-	else if (data.block.subtype == FSubtype::receive) {
+	else if (data.block.subtype == FSubtype::receive || data.block.subtype == FSubtype::open) {
 
-		// Don't want to call the delegate multiple times on a receive block
-		FScopeLock lk (&keyDelegateMutex);
 		auto account = data.account;
 		if (keyDelegateMap.count (TCHAR_TO_UTF8(*account)) > 0) {
 
+			// Received this block from websocket so don't need to have the receive block listener timer listening for it anymore.
 			auto it = receiveBlockListener.find (std::string (TCHAR_TO_UTF8 (*data.hash)));
 			if (it != receiveBlockListener.cend ()) {
-				// Cleanup
 				GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
 				receiveBlockListener.erase (it);
-				lk.Unlock ();
 			}
 
-			// This is a receive to an account we are automating
 			GetFrontierAndFire(data.amount, data.hash, account, FConfType::receive);
 		}
 	}
 }
 
 void UNanoManager::BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash) {
-	BlockConfirmed(hash, [this, delegate](RESPONSE_PARAMETERS) {
-		delegate.ExecuteIfBound(GetBlockConfirmedResponseData(RESPONSE_ARGUMENTS));
+	BlockConfirmed(hash, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+		delegate.ExecuteIfBound(GetBlockConfirmedResponseData(request, response, wasSuccessful));
 	});
 }
 
-void UNanoManager::BlockConfirmed(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& delegate) {
+void UNanoManager::BlockConfirmed(FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate) {
 	MakeRequest(GetBlockConfirmedJsonObject(hash), delegate);
 }
 
 void UNanoManager::SendWaitConfirmationBlock (FProcessResponseReceivedDelegate delegate, FBlock block) {
 
-	Process(block, [this, delegate, account = nano::account (TCHAR_TO_UTF8(*block.link)).to_account ()](RESPONSE_PARAMETERS){
-		auto process_response_data = GetProcessResponseData(RESPONSE_ARGUMENTS);
+	Process(block, [this, delegate, account = nano::account (TCHAR_TO_UTF8(*block.link)).to_account ()](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful){
+		auto process_response_data = GetProcessResponseData(request, response, wasSuccessful);
 		if (!process_response_data.error) {
-			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (account, &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
+			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate> (account, process_response_data, sendBlockListener, delegate);
 		} else {
 			delegate.ExecuteIfBound (process_response_data);
 		}
@@ -663,7 +598,7 @@ void UNanoManager::SendWaitConfirmation (FProcessResponseReceivedDelegate delega
 			nano::raw_key prv_key;
 			prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
 			auto pub_key = nano::pub_key(prv_key.data);
-			RegisterBlockListener<FProcessResponseData, SendDelegate, FProcessResponseReceivedDelegate> (pub_key.to_account (), &sendBlockListenerMutex, process_response_data, sendBlockListener, delegate);
+			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate> (pub_key.to_account (), process_response_data, sendBlockListener, delegate);
 		}
 		else
 		{
@@ -677,8 +612,8 @@ void UNanoManager::Send(FString const& private_key, FString const& account, FStr
 	MakeSendBlock (private_key, amount, account, [delegate, this](FMakeBlockResponseData data) {
 		if (!data.error) {
 			// Process the process
-			Process(data.block, [delegate](RESPONSE_PARAMETERS) {
-				delegate (GetProcessResponseData(RESPONSE_ARGUMENTS));
+			Process(data.block, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+				delegate (GetProcessResponseData(request, response, wasSuccessful));
 			});
 		} else {
 			FProcessResponseData processData;
@@ -718,18 +653,18 @@ void UNanoManager::MakeSendBlock (FString const & private_key, FString const & a
 	sendArgs.amount = amount;
 
 	// Get the frontier
-	AccountFrontier(pub_key.to_account().c_str(), [this, sendArgs, delegate](RESPONSE_PARAMETERS) mutable {
+	AccountFrontier(pub_key.to_account().c_str(), [this, sendArgs, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
 
-		auto accountFrontierResponseData = GetAccountFrontierResponseData(RESPONSE_ARGUMENTS);
+		auto accountFrontierResponseData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 		if (!accountFrontierResponseData.error) {
 			sendArgs.balance = accountFrontierResponseData.balance;
 			sendArgs.frontier = accountFrontierResponseData.hash;
 			sendArgs.representative = accountFrontierResponseData.representative;
 
 			// Generate work
-			WorkGenerate(accountFrontierResponseData.hash, [this, sendArgs, delegate](RESPONSE_PARAMETERS) {
+			WorkGenerate(accountFrontierResponseData.hash, [this, sendArgs, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 
-				auto workGenerateResponseData = GetWorkGenerateResponseData(RESPONSE_ARGUMENTS);
+				auto workGenerateResponseData = GetWorkGenerateResponseData(request, response, wasSuccessful);
 				if (workGenerateResponseData.hash != "0") {
 
 					auto prv_key = nano::uint256_union(TCHAR_TO_UTF8(*sendArgs.private_key));
@@ -768,7 +703,83 @@ void UNanoManager::MakeSendBlock (FString const & private_key, FString const & a
 	});
 }
 
-FRequestNanoResponseData UNanoManager::GetRequestNanoData(RESPONSE_PARAMETERS) {
+void UNanoManager::Receive (const FProcessResponseReceivedDelegate & delegate, FString const & private_key, FString source_hash, FString const & amount) {
+	MakeReceiveBlock (private_key, source_hash, amount, [delegate, this](FMakeBlockResponseData data) {
+		if (!data.error) {
+			// Process the process
+			Process(data.block, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+				delegate.ExecuteIfBound (GetProcessResponseData(request, response, wasSuccessful));
+			});
+		} else {
+			FProcessResponseData processData;
+			processData.error = true;
+			delegate.ExecuteIfBound (processData);
+		}
+	});
+}
+
+void UNanoManager::MakeReceiveBlock (FMakeBlockDelegate delegate, FString const & private_key, FString source_hash, FString const & amount) {
+	MakeReceiveBlock(private_key, source_hash, amount, [this, delegate](const FMakeBlockResponseData& data) {
+		delegate.ExecuteIfBound(data);
+	});	
+}
+
+void UNanoManager::MakeReceiveBlock (FString const & private_key, FString source_hash, FString const & amount, TFunction<void(FMakeBlockResponseData)> const& delegate) {
+	// Need to construct the block myself
+	nano::raw_key prv_key;
+	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+
+	auto pub_key = nano::pub_key(prv_key.data);
+
+	// Get the frontier
+	AccountFrontier(pub_key.to_account().c_str(), [this, private_key, source_hash, amount, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
+
+		auto accountFrontierResponseData = GetAccountFrontierResponseData(request, response, wasSuccessful);
+		if (!accountFrontierResponseData.error) {
+
+			// Generate work
+			WorkGenerate(accountFrontierResponseData.hash, [this, private_key, source_hash, amount, delegate, accountFrontierResponseData](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+
+				auto workGenerateResponseData = GetWorkGenerateResponseData(request, response, wasSuccessful);
+				if (workGenerateResponseData.hash != "0") {
+
+					auto prv_key = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+					auto this_account_public_key = (nano::pub_key (prv_key));
+
+					nano::amount bal;
+					bal.decode_dec(TCHAR_TO_UTF8(*accountFrontierResponseData.balance));
+
+					nano::amount amo;
+					amo.decode_dec(TCHAR_TO_UTF8(*amount));
+
+					FBlock block;
+					block.account = this_account_public_key.to_account().c_str();
+
+					auto str = (bal.number() + amo.number()).ToString();
+					str.RemoveFromStart(TEXT("0x"));
+					block.balance = FString (BaseConverter::HexToDecimalConverter ().Convert(std::string (TCHAR_TO_UTF8 (*str.ToUpper()))).c_str ());
+
+					block.link = source_hash;
+					block.previous = accountFrontierResponseData.hash;
+					block.private_key = private_key;
+					block.representative = accountFrontierResponseData.representative;
+					block.work = workGenerateResponseData.work;
+
+					FMakeBlockResponseData makeBlockData;
+					makeBlockData.block = block;
+					delegate (makeBlockData);
+				}
+			});
+		} else {
+			FMakeBlockResponseData makeBlockData;
+			makeBlockData.error = true;
+			delegate (makeBlockData);
+		}
+	});
+
+}
+
+FRequestNanoResponseData UNanoManager::GetRequestNanoData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FRequestNanoResponseData data;
 	RETURN_ERROR_IF_INVALID_RESPONSE(data)
 
@@ -779,7 +790,7 @@ FRequestNanoResponseData UNanoManager::GetRequestNanoData(RESPONSE_PARAMETERS) {
 	return data;
 }
 
-FBlockConfirmedResponseData UNanoManager::GetBlockConfirmedResponseData(RESPONSE_PARAMETERS) {
+FBlockConfirmedResponseData UNanoManager::GetBlockConfirmedResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FBlockConfirmedResponseData data;
 	RETURN_ERROR_IF_INVALID_RESPONSE(data)
 
@@ -787,15 +798,15 @@ FBlockConfirmedResponseData UNanoManager::GetBlockConfirmedResponseData(RESPONSE
 	return data;
 }
 
-FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(RESPONSE_PARAMETERS) const {
+FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) const {
 	FAccountFrontierResponseData accountFrontierResponseData;
 
-	if (!RequestResponseIsValid (RESPONSE_ARGUMENTS)) {
+	if (!RequestResponseIsValid (request, response, wasSuccessful)) {
 		accountFrontierResponseData.error = true;
 		return accountFrontierResponseData;
 	}
 
-	auto reqRespJson = GetResponseJson(RESPONSE_ARGUMENTS);
+	auto reqRespJson = GetResponseJson(request, response, wasSuccessful);
 	if (reqRespJson.response->HasField("error")) {
 
 		if (reqRespJson.request->GetStringField("error") == "1") {
@@ -820,7 +831,7 @@ FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(RESPON
 	return accountFrontierResponseData;
 }
 
-FGetBalanceResponseData UNanoManager::GetBalanceResponseData(RESPONSE_PARAMETERS) {
+FGetBalanceResponseData UNanoManager::GetBalanceResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FGetBalanceResponseData data;
 	RETURN_ERROR_IF_INVALID_RESPONSE(data)
 
@@ -830,7 +841,7 @@ FGetBalanceResponseData UNanoManager::GetBalanceResponseData(RESPONSE_PARAMETERS
 	return data;
 }
 
-FPendingResponseData UNanoManager::GetPendingResponseData(RESPONSE_PARAMETERS) {
+FPendingResponseData UNanoManager::GetPendingResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FPendingResponseData pendingResponseData;
 	RETURN_ERROR_IF_INVALID_RESPONSE(pendingResponseData)
 
@@ -853,7 +864,7 @@ FPendingResponseData UNanoManager::GetPendingResponseData(RESPONSE_PARAMETERS) {
 	return pendingResponseData;
 }
 
-FWorkGenerateResponseData UNanoManager::GetWorkGenerateResponseData(RESPONSE_PARAMETERS) {
+FWorkGenerateResponseData UNanoManager::GetWorkGenerateResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FWorkGenerateResponseData data;
 	RETURN_ERROR_IF_INVALID_RESPONSE(data);
 
@@ -862,7 +873,7 @@ FWorkGenerateResponseData UNanoManager::GetWorkGenerateResponseData(RESPONSE_PAR
 	return data;
 }
 
-FProcessResponseData UNanoManager::GetProcessResponseData(RESPONSE_PARAMETERS) {
+FProcessResponseData UNanoManager::GetProcessResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	FProcessResponseData data;
 	RETURN_ERROR_IF_INVALID_RESPONSE(data);
 
@@ -870,20 +881,57 @@ FProcessResponseData UNanoManager::GetProcessResponseData(RESPONSE_PARAMETERS) {
 	return data;
 }
 
-void UNanoManager::ListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount)
+void UNanoManager::SingleUseAccountListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount)
 {
 	// Check we are listening for websocket events for this account
 	{
-		FScopeLock keyLk (&keyDelegateMutex);
-		FScopeLock watcherLk (&watchersMutex);
 		check (keyDelegateMap.find (TCHAR_TO_UTF8(*account)) != keyDelegateMap.cend () || watchers.Find (account));
 	}
 
 	{
-		FScopeLock lk (&listeningPaymentMutex);
+		// Clear timer if this payment exists already.
+		if (listeningPayment.delegate.IsBound ()) {
+			GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+		}
 		listeningPayment.account = account;
 		listeningPayment.amount = amount;
 		listeningPayment.delegate = delegate;
+		listeningPayment.timerHandle = FTimerHandle ();
+
+		// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+		GetWorld()->GetTimerManager().SetTimer(listeningPayment.timerHandle, [this, account]() {
+
+			if (listeningPayment.delegate.IsBound () && listeningPayment.account == account) {
+				// Get Pending blocks (minimum of amount)
+
+				FPendingRequestData pendingRequestData;
+				pendingRequestData.account = account;
+				pendingRequestData.count = "1";
+				pendingRequestData.threshold = TCHAR_TO_UTF8(*listeningPayment.amount);
+				auto jsonObject = FJsonObjectConverter::UStructToJsonObject(pendingRequestData);
+
+				MakeRequest (jsonObject, [this, account](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+					auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
+					if (!pendingData.error && pendingData.blocks.Num() > 0) {
+						for (auto pendingBlock : pendingData.blocks) {
+							nano::amount amount;
+							amount.decode_dec(TCHAR_TO_UTF8(*pendingBlock.amount));
+							nano::amount amount1;
+							amount1.decode_dec (TCHAR_TO_UTF8(*listeningPayment.amount));
+
+							// Payment successful! clear and call delegate
+							if (amount1 == amount && listeningPayment.account == account && listeningPayment.delegate.IsBound ()) {
+	
+								auto delegate = listeningPayment.delegate;
+								GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+								delegate.ExecuteIfBound (pendingBlock.hash);
+								delegate.Unbind ();
+							}
+						}
+					}
+				});
+			};
+		}, 5.0f, true, 1.f);
 	}
 }
 
@@ -908,7 +956,7 @@ void UNanoManager::MakeRequest(TSharedPtr<FJsonObject> JsonObject, TFunction<voi
 	HttpRequest->ProcessRequest();
 }
 
-auto UNanoManager::GetResponseJson(RESPONSE_PARAMETERS) -> ReqRespJson {
+auto UNanoManager::GetResponseJson(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) -> ReqRespJson {
 	// Make sure we are getting json
 	ReqRespJson reqRespJson;
 
@@ -916,7 +964,7 @@ auto UNanoManager::GetResponseJson(RESPONSE_PARAMETERS) -> ReqRespJson {
 		return reqRespJson;
 	}
 
-	if (request->GetContentType() == "application/json" && response->GetContentType() == "application/json") {
+	if (request->GetContentType() == "application/json" && response->GetContentType().StartsWith("application/json")) {
 		// Response
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(response->GetContentAsString());
 
@@ -935,7 +983,7 @@ auto UNanoManager::GetResponseJson(RESPONSE_PARAMETERS) -> ReqRespJson {
 	return reqRespJson;
 }
 
-bool UNanoManager::RequestResponseIsValid(RESPONSE_PARAMETERS) {
+bool UNanoManager::RequestResponseIsValid(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 	if (!wasSuccessful || !response.IsValid()) {
 		return false;
 	}

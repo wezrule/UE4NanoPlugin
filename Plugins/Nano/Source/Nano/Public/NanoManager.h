@@ -13,50 +13,37 @@
 #include <string>
 #include "NanoManager.generated.h"
 
-#define RESPONSE_PARAMETERS FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful
-
 class PrvKeyAutomateDelegate {
 public:
 	PrvKeyAutomateDelegate() = default;
-	PrvKeyAutomateDelegate(const FString& prv_key, const FAutomateResponseReceivedDelegate& delegate)
+	PrvKeyAutomateDelegate(const FString& prv_key, const FAutomateResponseReceivedDelegate& delegate, const FString& minimum)
 		: prv_key(prv_key)
-		, delegate(delegate) { }
+		, delegate(delegate)
+		, minimum (minimum){ }
 
 	PrvKeyAutomateDelegate(const PrvKeyAutomateDelegate&) = delete;
 	PrvKeyAutomateDelegate& operator= (const PrvKeyAutomateDelegate&) = delete;
 
-	FString prv_key; // If null that means we are just watching it
+	FString prv_key;
 	FAutomateResponseReceivedDelegate delegate;
+	FString minimum;
 	FTimerHandle timerHandle;
 };
 
-class ReceiveDelegate {
+// Use for send/receive block listeners
+template<class ResponseData, class ResponseReceiveDelegate>
+class BlockListenerDelegate {
 public:
-	ReceiveDelegate() = default;
-	ReceiveDelegate(const FAutomateResponseReceivedDelegate & delegate_, const FAutomateResponseData& data)
+	BlockListenerDelegate() = default;
+	BlockListenerDelegate(const ResponseData& data, const ResponseReceiveDelegate & delegate_)
 		: delegate(delegate_),
 	data (data) { }
 
-	ReceiveDelegate(const ReceiveDelegate&) = delete;
-	ReceiveDelegate& operator= (const ReceiveDelegate&) = delete;
+	BlockListenerDelegate(const BlockListenerDelegate&) = delete;
+	BlockListenerDelegate& operator= (const BlockListenerDelegate&) = delete;
 
-	FAutomateResponseReceivedDelegate delegate;
-	FAutomateResponseData data;
-	FTimerHandle timerHandle;
-};
-
-class SendDelegate {
-public:
-	SendDelegate() = default;
-	SendDelegate(const FProcessResponseReceivedDelegate& delegate_, const FProcessResponseData& data)
-		: delegate(delegate_),
-	data (data) { }
-
-	SendDelegate(const SendDelegate&) = delete;
-	SendDelegate& operator= (const SendDelegate&) = delete;
-
-	FProcessResponseReceivedDelegate delegate;
-	FProcessResponseData data;
+	ResponseReceiveDelegate delegate;
+	ResponseData data;
 	FTimerHandle timerHandle;
 };
 
@@ -64,6 +51,7 @@ struct ListeningPayment {
 	FListenPaymentDelegate delegate;
 	FString account;
 	FString amount;
+	FTimerHandle timerHandle;
 };
 
 UCLASS(BlueprintType, Blueprintable)
@@ -72,51 +60,84 @@ class NANO_API UNanoManager : public UObject
 	GENERATED_BODY()
 
 public:
+	// Gets confirmed account balance and pending block balance
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress);
 
+	// Generate work for this block hash
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void WorkGenerate(FWorkGenerateResponseReceivedDelegate delegate, FString hash);
 
+	// Process this block
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Process(FProcessResponseReceivedDelegate delegate, FBlock block);
 
+	// Process this block, only calls event when the block is confirmed.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void ProcessWaitConfirmation (FProcessResponseReceivedDelegate delegate, FBlock block);
 
+	// This relies on "request_nano" action being available on the rpc server
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress);
 
+	// Get the frontier of this block. If the account doesn't exist, it will be filled in with some default values.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AccountFrontier(FAccountFrontierResponseReceivedDelegate delegate, FString account);
 
+	// Get pending blocks for an account. Currently default to getting 5.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void Pending(FPendingResponseReceivedDelegate delegate, FString account);
+	void Pending(FPendingResponseReceivedDelegate delegate, FString account, FString threshold = "0", int32 maxCount = 100);
 
+	// Check if this block hash is confirmed by the network
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash);
 
-	// Utility functions
+	// Create a send block and publish it. Calls delegate if there's no errors but doesn't wait for confirmation on the network (see SendWaitConfirmation)
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
 
+	// Create a send block and publish it, only calls event when there is confirmation on the network.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SendWaitConfirmation (FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
 
+	// Pass in a constructed send block and publish it, only calls event when there is confirmation on the network.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SendWaitConfirmationBlock (FProcessResponseReceivedDelegate delegate, FBlock block);
 
+	// Can only be called once with this private key. A websocket registration will happen automatically
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void Automate(FAutomateResponseReceivedDelegate delegate, FString const& private_key, UNanoWebsocket* websocket);
+	void AutomaticallyPocketRegister(FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& private_key, FString minimum = "0");
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void AutomateUnregister(const FString& account, UNanoWebsocket* websocket);
+	void AutomaticallyPocketUnregister (const FString& account, UNanoWebsocket* websocket);
 
+	// Registers an account for watching on websocket (needed for a variety of other functions). If there are other watchers it will just increment an id.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
 	int32 Watch(const FWatchAccountReceivedDelegate & delegate, FString const& account, UNanoWebsocket* websocket);
 
+	// Unregisters an account for watching on websocket. Will only remove from websocket if there are no other watchers.
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Unwatch(FString const& account, const int32& id, UNanoWebsocket* websocket);
+
+	// This internally sets up the listeners so that all the delegates requiring them get called. Very important!
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
+
+	// Checks pending blocks for a payment of a certain amount.
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void SingleUseAccountListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount);
+
+	// Utility to construct a send block
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void MakeSendBlock (FMakeBlockDelegate delegate, FString const & prvKey, FString const & amount, FString const& destination_account);
+
+	// Utility to construct a receive block
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void MakeReceiveBlock (FMakeBlockDelegate delegate, FString const & private_key, FString source_hash, FString const & amount);
+
+	// Utility to receive a pending block
+	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
+	void Receive (const FProcessResponseReceivedDelegate & delegate, FString const & private_key, FString source_hash, FString const & amount);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetDataSubdirectory(FString const& subdir);
@@ -133,15 +154,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	TArray<FString> GetSeedFiles() const;
 
-	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
-
-	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void ListenForPaymentWaitConfirmation (FListenPaymentDelegate delegate, FString const& account, FString const& amount);
-
-	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void MakeSendBlock (FMakeBlockDelegate delegate, FString const & prvKey, FString const & amount, FString const& destination_account);
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NanoManager")
 	FString rpcUrl;
 
@@ -149,20 +161,11 @@ public:
 	FString defaultRepresentative { "nano_1iuz18n4g4wfp9gf7p1s8qkygxw7wx9qfjq6a9aq68uyrdnningdcjontgar" };
 
 private:
-	FCriticalSection keyDelegateMutex;
 	std::unordered_map<std::string, PrvKeyAutomateDelegate> keyDelegateMap;
-
-	FCriticalSection watchersMutex;
 	TMap<FString, TMap<int32, FWatchAccountReceivedDelegate>> watchers;
 	int32 watcherId{0};
-
-	FCriticalSection sendBlockListenerMutex;
-	std::unordered_map<std::string, SendDelegate> sendBlockListener;
-
-	FCriticalSection receiveBlockListenerMutex;
-	std::unordered_map<std::string, ReceiveDelegate> receiveBlockListener;
-
-	FCriticalSection listeningPaymentMutex;
+	std::unordered_map<std::string, BlockListenerDelegate<FProcessResponseData, FProcessResponseReceivedDelegate>> sendBlockListener;
+	std::unordered_map<std::string, BlockListenerDelegate<FAutomateResponseData, FAutomateResponseReceivedDelegate>> receiveBlockListener;
 	ListeningPayment listeningPayment;
 
 	struct ReqRespJson {
@@ -170,51 +173,53 @@ private:
 		TSharedPtr<FJsonObject> response;
 	};
 
-	static ReqRespJson GetResponseJson(RESPONSE_PARAMETERS);
-	static bool RequestResponseIsValid(RESPONSE_PARAMETERS);
+	static ReqRespJson GetResponseJson(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
+	static bool RequestResponseIsValid(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 
-	void MakeRequest(TSharedPtr<FJsonObject> JsonObject, TFunction<void(RESPONSE_PARAMETERS)> delegate);
+	void MakeRequest(TSharedPtr<FJsonObject> JsonObject, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> delegate);
 
 	TSharedRef<IHttpRequest> CreateHttpRequest(TSharedPtr<FJsonObject> JsonObject);
 
 	TSharedPtr<FJsonObject> GetAccountFrontierJsonObject(FString const& account);
-	FAccountFrontierResponseData GetAccountFrontierResponseData(RESPONSE_PARAMETERS) const;
+	FAccountFrontierResponseData GetAccountFrontierResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) const;
 
-	void AccountFrontier(FString account, TFunction<void(RESPONSE_PARAMETERS)> const& d);
+	void AccountFrontier(FString account, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
 
 	TSharedPtr<FJsonObject> GetWorkGenerateJsonObject(FString hash);
-	static FWorkGenerateResponseData GetWorkGenerateResponseData(RESPONSE_PARAMETERS);
+	static FWorkGenerateResponseData GetWorkGenerateResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 
-	void WorkGenerate(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& d);
+	void WorkGenerate(FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
 
 	void Send(FString const& private_key, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate);
 
-	template<class T, class T1, class T2>
-	void RegisterBlockListener (std::string const & account, FCriticalSection * mutex, T const & responseData, std::unordered_map<std::string, T1> & blockListener, T2 delegate);
+	template<class T, class T1>
+	void RegisterBlockListener (std::string const & account, T const & responseData, std::unordered_map<std::string, BlockListenerDelegate<T, T1>> & blockListener, T1 delegate);
 
 	void MakeSendBlock (FString const & prvKey, FString const & amount, FString const& destination_account, TFunction<void(FMakeBlockResponseData)> const& delegate);
 
-	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account);
-	static FPendingResponseData GetPendingResponseData(RESPONSE_PARAMETERS);
-	static FGetBalanceResponseData GetBalanceResponseData(RESPONSE_PARAMETERS);
-	static FProcessResponseData GetProcessResponseData(RESPONSE_PARAMETERS);
-	static FRequestNanoResponseData GetRequestNanoData(RESPONSE_PARAMETERS);
+	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account, FString threshold, int32 maxCount);
+	static FPendingResponseData GetPendingResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
+	static FGetBalanceResponseData GetBalanceResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
+	static FProcessResponseData GetProcessResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
+	static FRequestNanoResponseData GetRequestNanoData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 
-	void BlockConfirmed(FString hash, TFunction<void(RESPONSE_PARAMETERS)> const& d);
+	void BlockConfirmed(FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
 	TSharedPtr<FJsonObject> GetBlockConfirmedJsonObject(FString const& hash);
-	static FBlockConfirmedResponseData GetBlockConfirmedResponseData(RESPONSE_PARAMETERS);
+	static FBlockConfirmedResponseData GetBlockConfirmedResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 
-	void Pending(FString account, TFunction<void(RESPONSE_PARAMETERS)> const& d);
+	void Pending(FString account, FString threshold, int32 maxCount, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
 
-	void Process(FBlock block, TFunction<void(RESPONSE_PARAMETERS)> const& delegate);
+	void Process(FBlock block, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate);
 
 	void AutomateWorkGenerateLoop(FAccountFrontierResponseData frontierData, TArray<FPendingBlock> pendingBlocks);
-	void AutomatePocketPendingUtility(const FString& account);
+	void AutomatePocketPendingUtility(const FString& account, const FString& minimum);
 
 	void GetFrontierAndFire(const FString& amount, const FString& hash, FString const & account, FConfType type);
 
 	void GetFrontierAndFireWatchers (const FString& amount, const FString& hash, FString const & account, FConfType type);
 	FAutomateResponseData GetWebsocketResponseData (const FString& amount, const FString& hash, FString const & account, FConfType type, FAccountFrontierResponseData const & frontierData);
+
+	void MakeReceiveBlock (FString const & private_key, FString source_hash, FString const & amount, TFunction<void(FMakeBlockResponseData)> const& delegate);
 
 	UFUNCTION()
 	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData & data);
