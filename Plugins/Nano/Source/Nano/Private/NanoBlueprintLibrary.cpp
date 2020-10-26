@@ -1,22 +1,21 @@
 #include "NanoBlueprintLibrary.h"
-#include <memory>
-#include <duthomhas/csprng.hpp>
-#include <baseconverter/base_converter.hpp>
+
+#include "HAL/FileManagerGeneric.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "ImageWrapper/Public/IImageWrapper.h"
+#include "Modules/ModuleManager.h"
 
 #include <Runtime/Core/Public/Misc/AES.h>
 
+#include <baseconverter/base_converter.hpp>
+#include <duthomhas/csprng.hpp>
+#include <memory>
+#include <qrcode/QrCode.hpp>
 #include <sha256/sha256.hpp>
 
-#include "IImageWrapper.h"
-#include "Modules/ModuleManager.h"
-#include "ImageWrapper/Public/IImageWrapper.h"
-#include "IImageWrapperModule.h"
-#include "HAL/FileManagerGeneric.h"
-
-#include <qrcode/QrCode.hpp>
-
 #ifdef _WIN32
-#pragma warning (disable : 4804 ) /* '/': unsafe use of type 'bool' in operation warnings */
+#pragma warning(disable : 4804) /* '/': unsafe use of type 'bool' in operation warnings */
 #endif
 #include <blake2/blake2.h>
 #include <ed25519-donna/ed25519.h>
@@ -24,37 +23,33 @@
 
 using namespace std::literals;
 
-namespace
-{
-nano::public_key PrivateKeyToPublicKeyData (const FString& privateKey);
-nano::private_key SeedAccountPrvData (const FString& seed_f, int32 index);
-nano::public_key SeedAccountPubData (const FString& seed, int32 index);
-}
+namespace {
+nano::public_key PrivateKeyToPublicKeyData(const FString& privateKey);
+nano::private_key SeedAccountPrvData(const FString& seed_f, int32 index);
+nano::public_key SeedAccountPubData(const FString& seed, int32 index);
+}	 // namespace
 
-bool UNanoBlueprintLibrary::ValidateRaw (const FString& raw)
-{
+bool UNanoBlueprintLibrary::ValidateRaw(const FString& raw) {
 	// Rudimentary check... it could still be above the largest raw value at 39 digits but shouldn't be a problem
-	if (raw.Len () > 39 || raw.IsEmpty ()) {
+	if (raw.Len() > 39 || raw.IsEmpty()) {
 		return false;
 	}
 
 	// Check that it contains only 0-9 digits
-	auto str = std::string (TCHAR_TO_UTF8(*raw));
-	auto valid = str.end() == std::find_if(str.begin(), str.end(), [](unsigned char c) {
-		return !isdigit(c);
-	});
+	auto str = std::string(TCHAR_TO_UTF8(*raw));
+	auto valid = str.end() == std::find_if(str.begin(), str.end(), [](unsigned char c) { return !isdigit(c); });
 
 	if (valid) {
-		nano::uint256_t num (BaseConverter::DecimalToHexConverter ().Convert ((TCHAR_TO_UTF8(*raw))).c_str ());
-		valid = (num <= nano::uint256_t (BaseConverter::DecimalToHexConverter ().Convert ("340282366920938463463374607431768211455").c_str ()));
+		nano::uint256_t num(BaseConverter::DecimalToHexConverter().Convert((TCHAR_TO_UTF8(*raw))).c_str());
+		valid =
+			(num <= nano::uint256_t(BaseConverter::DecimalToHexConverter().Convert("340282366920938463463374607431768211455").c_str()));
 	}
 	return valid;
 }
 
 // Could probably use regex for some of this
-bool UNanoBlueprintLibrary::ValidateNano (const FString& nano)
-{
-	if (nano.Len () > 40 || nano.IsEmpty ()) {
+bool UNanoBlueprintLibrary::ValidateNano(const FString& nano) {
+	if (nano.Len() > 40 || nano.IsEmpty()) {
 		return false;
 	}
 
@@ -62,47 +57,40 @@ bool UNanoBlueprintLibrary::ValidateNano (const FString& nano)
 	auto error = false;
 	auto num_decimal_points = 0;
 	auto decimal_point_index = -1;
-	for (auto i = 0; i < nano.Len (); ++i)
-	{
+	for (auto i = 0; i < nano.Len(); ++i) {
 		auto c = nano[i];
-		if (!std::isdigit (c))
-		{
+		if (!std::isdigit(c)) {
 			if (c == '.') {
 				decimal_point_index = i;
 				++num_decimal_points;
 			} else {
 				error = true;
 				break;
-			}	
+			}
 		}
 	}
 
-	if (error || num_decimal_points > 1)
-	{
+	if (error || num_decimal_points > 1) {
 		return false;
 	}
 
-	if (decimal_point_index == -1)
-	{
+	if (decimal_point_index == -1) {
 		// There is no decimal and it contains only digits
-		auto as_int = FCString::Atoi (*nano);
-		return as_int <= 340'282'366; // This is the maximum amount of Nano there is
-	}
-	else
-	{
+		auto as_int = FCString::Atoi(*nano);
+		return as_int <= 340'282'366;	 // This is the maximum amount of Nano there is
+	} else {
 		// Split the string
 		FString integer_part;
 		FString fraction_part;
-		if (!nano.Split (".", &integer_part, &fraction_part) || integer_part.Len () > 9) {
+		if (!nano.Split(".", &integer_part, &fraction_part) || integer_part.Len() > 9) {
 			return false;
 		}
-		
-		auto as_int = FCString::Atoi (*integer_part);
-		error = as_int > 340'282'366; // This is the maximum amount of Nano there is
+
+		auto as_int = FCString::Atoi(*integer_part);
+		error = as_int > 340'282'366;	 // This is the maximum amount of Nano there is
 		if (!error) {
-			
-			nano::uint128_t max (BaseConverter::DecimalToHexConverter ().Convert ("920938463463374607431768211456").c_str ());
-			nano::uint128_t num (BaseConverter::DecimalToHexConverter ().Convert ((TCHAR_TO_UTF8(*fraction_part))).c_str ());
+			nano::uint128_t max(BaseConverter::DecimalToHexConverter().Convert("920938463463374607431768211456").c_str());
+			nano::uint128_t num(BaseConverter::DecimalToHexConverter().Convert((TCHAR_TO_UTF8(*fraction_part))).c_str());
 			error = num > max;
 		}
 	}
@@ -111,193 +99,181 @@ bool UNanoBlueprintLibrary::ValidateNano (const FString& nano)
 }
 
 FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
-	check (ValidateNano (nano));
+	check(ValidateNano(nano));
 
 	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
-	auto str = std::string (TCHAR_TO_UTF8(*nano));
-	auto it = str.begin ();
-	for (; it < str.end (); ++it)
-	{
-		if (*it == '.')
-		{
-			it = str.erase (it);
+	auto str = std::string(TCHAR_TO_UTF8(*nano));
+	auto it = str.begin();
+	for (; it < str.end(); ++it) {
+		if (*it == '.') {
+			it = str.erase(it);
 			break;
 		}
 	}
-	auto num_zeroes_to_add = 30 - std::distance (it, str.end ());
-	auto raw = str + std::string (num_zeroes_to_add, '0');
+	auto num_zeroes_to_add = 30 - std::distance(it, str.end());
+	auto raw = str + std::string(num_zeroes_to_add, '0');
 
 	// Remove leading zeroes
 	auto start_index = 0;
-	for (auto i = raw.begin (); i < raw.end (); ++i)
-	{
-		if (*i == '0')
-		{
+	for (auto i = raw.begin(); i < raw.end(); ++i) {
+		if (*i == '0') {
 			++start_index;
-		}
-		else
-		{
+		} else {
 			break;
 		}
 	}
 
 	// Remove leading zeroes
-	return std::string (raw.begin () + start_index, raw.end ()).c_str ();
+	return std::string(raw.begin() + start_index, raw.end()).c_str();
 }
 
 FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
-	check (ValidateRaw (raw));
+	check(ValidateRaw(raw));
 
 	// Insert a decimal 30 decimal places from the right
-	auto str = std::string (TCHAR_TO_UTF8(*raw));
+	auto str = std::string(TCHAR_TO_UTF8(*raw));
 
-	if (str.size () <= 30)
-	{
-		str = "0."s + std::string (30 - str.size (), '0') + str;
-	}
-	else
-	{
-		auto decimal_index = str.size () - 30;
-		str.insert (str.begin () + decimal_index, '.');
+	if (str.size() <= 30) {
+		str = "0."s + std::string(30 - str.size(), '0') + str;
+	} else {
+		auto decimal_index = str.size() - 30;
+		str.insert(str.begin() + decimal_index, '.');
 	}
 
 	auto index = 0;
-	for (auto i = str.rbegin (); i < str.rend (); ++i, ++index)
-	{
-		if (*i != '0')
-		{
-			if (*i == '.')
-			{
+	for (auto i = str.rbegin(); i < str.rend(); ++i, ++index) {
+		if (*i != '0') {
+			if (*i == '.') {
 				--index;
 			}
-			break;		
+			break;
 		}
 	}
 
-	return std::string (str.begin (), str.begin () + str.size () - index).c_str ();
+	return std::string(str.begin(), str.begin() + str.size() - index).c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 	nano::amount amount1;
-	amount1.decode_dec (TCHAR_TO_UTF8(*raw1));
+	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
 
 	nano::amount amount2;
-	amount2.decode_dec (TCHAR_TO_UTF8(*raw2));
+	amount2.decode_dec(TCHAR_TO_UTF8(*raw2));
 
-	nano::amount total = (amount1.number () + amount2.number ());
-	return total.to_string_dec ().c_str ();
+	nano::amount total = (amount1.number() + amount2.number());
+	return total.to_string_dec().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Subtract(FString raw1, FString raw2) {
-
 	nano::amount amount1;
-	amount1.decode_dec (TCHAR_TO_UTF8(*raw1));
+	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
 
 	nano::amount amount2;
-	amount2.decode_dec (TCHAR_TO_UTF8(*raw2));
+	amount2.decode_dec(TCHAR_TO_UTF8(*raw2));
 
-	nano::amount total = (amount1.number () - amount2.number ());
-	return total.to_string_dec ().c_str ();
+	nano::amount total = (amount1.number() - amount2.number());
+	return total.to_string_dec().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
 	nano::amount amount1;
-	amount1.decode_dec (TCHAR_TO_UTF8(*raw));
+	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
 	nano::amount amount2;
-	amount2.decode_dec (TCHAR_TO_UTF8(*baseRaw));
+	amount2.decode_dec(TCHAR_TO_UTF8(*baseRaw));
 
 	return amount1 > amount2;
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::GreaterOrEqual(FString raw, FString baseRaw) {
 	nano::amount amount1;
-	amount1.decode_dec (TCHAR_TO_UTF8(*raw));
+	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
 	nano::amount amount2;
-	amount2.decode_dec (TCHAR_TO_UTF8(*baseRaw));
+	amount2.decode_dec(TCHAR_TO_UTF8(*baseRaw));
 
 	return amount1 == amount2 || amount1 > amount2;
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
-FString UNanoBlueprintLibrary::ConvertnanoToRaw(FString nano_f)
-{
+UFUNCTION(BlueprintCallable, Category = "Nano")
+FString UNanoBlueprintLibrary::ConvertnanoToRaw(FString nano_f) {
 	nano::amount amount1;
-	amount1.decode_dec (TCHAR_TO_UTF8(*nano_f));
+	amount1.decode_dec(TCHAR_TO_UTF8(*nano_f));
 
-	nano::amount multiplier (nano::xrb_ratio);
+	nano::amount multiplier(nano::xrb_ratio);
 
-	nano::amount new_amount = (amount1.number () * multiplier.number ());
-	return new_amount.to_string_dec ().c_str ();
+	nano::amount new_amount = (amount1.number() * multiplier.number());
+	return new_amount.to_string_dec().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::CreateSeed() {
 	duthomhas::csprng rng;
 	nano::uint256_union seed;
-	rng (seed.bytes);
-	return FString (seed.to_string ().c_str ());
+	rng(seed.bytes);
+	return FString(seed.to_string().c_str());
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::PrivateKeyFromSeed(const FString& seed, int32 index) {
-	return SeedAccountPrvData (seed, index).to_string ().c_str();
+	return SeedAccountPrvData(seed, index).to_string().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::PublicKeyFromPrivateKey(const FString& privateKey) {
-	return PrivateKeyToPublicKeyData (privateKey).to_string ().c_str ();
+	return PrivateKeyToPublicKeyData(privateKey).to_string().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::AccountFromPrivateKey(const FString& privateKey) {
-	return PrivateKeyToPublicKeyData (privateKey).to_account ().c_str ();
+	return PrivateKeyToPublicKeyData(privateKey).to_account().c_str();
 }
 
 // As hex
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::PublicKeyFromSeed(const FString& seed, int32 index) {
-	return SeedAccountPubData(seed, index).to_string ().c_str ();
+	return SeedAccountPubData(seed, index).to_string().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::AccountFromSeed(const FString& seed, int32 index) {
-	return SeedAccountPubData(seed, index).to_account ().c_str ();
+	return SeedAccountPubData(seed, index).to_account().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::PublicKeyFromAccount(const FString& account_f) {
-	std::string account_str (TCHAR_TO_UTF8(*account_f));
+	std::string account_str(TCHAR_TO_UTF8(*account_f));
 	nano::account account;
-	account.decode_account (account_str);
-	return account.to_string ().c_str ();
+	account.decode_account(account_str);
+	return account.to_string().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::AccountFromPublicKey(const FString& publicKey) {
-	nano::account account (TCHAR_TO_UTF8(*publicKey));
-	return account.to_account ().c_str ();
+	nano::account account(TCHAR_TO_UTF8(*publicKey));
+	return account.to_account().c_str();
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::SHA256(const FString& string) {
 	return sha256(TCHAR_TO_UTF8(*string)).c_str();
 }
 
 // Encrypt/Decrypt both taken from https://kelheor.space/2018/11/12/how-to-encrypt-data-with-aes-256-in-ue4/
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& password) {
-	check (plainSeed.Len () == 64);
-	auto key = SHA256 (password);
+	check(plainSeed.Len() == 64);
+	auto key = SHA256(password);
 
 	// Check inputs
-	if (plainSeed.IsEmpty()) return "";  //empty string? do nothing
-	if (key.IsEmpty()) return "";
+	if (plainSeed.IsEmpty())
+		return "";	// empty string? do nothing
+	if (key.IsEmpty())
+		return "";
 
 	// To split correctly final result of decryption from trash symbols
 	FString SplitSymbol = "EL@$@!";
@@ -305,88 +281,86 @@ FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& passwor
 
 	// We need at least 32 symbols key
 	key = FMD5::HashAnsiString(*key);
-	TCHAR *KeyTChar = key.GetCharArray().GetData();           
-	ANSICHAR *KeyAnsi = (ANSICHAR*)TCHAR_TO_ANSI(KeyTChar);
+	TCHAR* KeyTChar = key.GetCharArray().GetData();
+	ANSICHAR* KeyAnsi = (ANSICHAR*) TCHAR_TO_ANSI(KeyTChar);
 
 	// Calculate blob size and create blob
-	uint8* Blob; 
-	uint32 Size; 
-	 
+	uint8* Blob;
+	uint32 Size;
+
 	Size = plainSeed.Len();
 	Size = Size + (FAES::AESBlockSize - (Size % FAES::AESBlockSize));
 
 	Blob = new uint8[Size];
 
 	// Convert string to bytes and encrypt
-	if(StringToBytes(plainSeed, Blob, Size)) {
-
+	if (StringToBytes(plainSeed, Blob, Size)) {
 		FAES::EncryptData(Blob, Size, KeyAnsi);
 		plainSeed = FString::FromHexBlob(Blob, Size);
 
 		delete Blob;
-		return plainSeed;		
+		return plainSeed;
 	}
 
 	delete Blob;
-	return ""; 
-
+	return "";
 }
 
-UFUNCTION(BlueprintCallable, Category="Nano")
+UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& password) {
 	// Check inputs
-	if (cipherSeed.IsEmpty()) return ""; 
-	auto key = SHA256 (password);
-	if (key.IsEmpty()) return "";
+	if (cipherSeed.IsEmpty())
+		return "";
+	auto key = SHA256(password);
+	if (key.IsEmpty())
+		return "";
 
 	// To split correctly final result of decryption from trash symbols
 	FString SplitSymbol = "EL@$@!";
 
 	// We need at least 32 symbols key
 	key = FMD5::HashAnsiString(*key);
-	TCHAR *KeyTChar = key.GetCharArray().GetData();
-	ANSICHAR *KeyAnsi = (ANSICHAR*)TCHAR_TO_ANSI(KeyTChar);
-	
+	TCHAR* KeyTChar = key.GetCharArray().GetData();
+	ANSICHAR* KeyAnsi = (ANSICHAR*) TCHAR_TO_ANSI(KeyTChar);
+
 	// Calculate blob size and create blob
-	uint8* Blob; 
-	uint32 Size; 
+	uint8* Blob;
+	uint32 Size;
 
 	Size = cipherSeed.Len();
 	Size = Size + (FAES::AESBlockSize - (Size % FAES::AESBlockSize));
 
-	Blob = new uint8[Size]; 
+	Blob = new uint8[Size];
 
 	// Convert string to bytes and decrypt
 	if (FString::ToHexBlob(cipherSeed, Blob, Size)) {
-
-		FAES::DecryptData(Blob, Size, KeyAnsi);		
+		FAES::DecryptData(Blob, Size, KeyAnsi);
 		cipherSeed = BytesToString(Blob, Size);
 
 		// Split required data from trash
-		FString LeftData;	
-		FString RightData;	
+		FString LeftData;
+		FString RightData;
 		cipherSeed.Split(SplitSymbol, &LeftData, &RightData, ESearchCase::CaseSensitive, ESearchDir::FromStart);
 		cipherSeed = LeftData;
 
-		delete Blob; 
-		return cipherSeed; 
+		delete Blob;
+		return cipherSeed;
 	}
 
-	delete Blob; 
-	return ""; 
+	delete Blob;
+	return "";
 }
 
 // A lot of this was taken from: https://github.com/hzm/QRCode
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */)
-{
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
+	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
 	UTexture2D* texture = nullptr;
 
 	auto Width = (uint32) Size;
 	auto Height = (uint32) Size;
 
 	FString qrString = "nano:" + account;
-	if (amount != "")
-	{
+	if (amount != "") {
 		qrString += "?amount=" + amount;
 	}
 
@@ -395,89 +369,73 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(const int32& 
 
 	uint32 QRWidth, QRWidthAdjustedX, QRHeightAdjustedY, QRDataBytes;
 
-		QRWidth = qr.getSize ();
-		uint32 ScaleX = (Width - 2 * Margin) / QRWidth;
-		uint32 ScaleY = (Height - 2 * Margin) / QRWidth;
-		QRWidthAdjustedX = QRWidth * ScaleX;
-		QRHeightAdjustedY = QRWidth * ScaleY;
-		QRDataBytes = QRWidthAdjustedX * QRHeightAdjustedY * 3;
+	QRWidth = qr.getSize();
+	uint32 ScaleX = (Width - 2 * Margin) / QRWidth;
+	uint32 ScaleY = (Height - 2 * Margin) / QRWidth;
+	QRWidthAdjustedX = QRWidth * ScaleX;
+	QRHeightAdjustedY = QRWidth * ScaleY;
+	QRDataBytes = QRWidthAdjustedX * QRHeightAdjustedY * 3;
 
-		std::vector <uint8> RGBData (QRDataBytes, 0xff);
-		uint8* QRCodeDestData;
-		for (uint32 y = 0; y < QRWidth; y++)
-		{
-			QRCodeDestData = RGBData.data () + ScaleY * y * QRWidthAdjustedX * 3;
-			for (uint32 x = 0; x < QRWidth; x++)
+	std::vector<uint8> RGBData(QRDataBytes, 0xff);
+	uint8* QRCodeDestData;
+	for (uint32 y = 0; y < QRWidth; y++) {
+		QRCodeDestData = RGBData.data() + ScaleY * y * QRWidthAdjustedX * 3;
+		for (uint32 x = 0; x < QRWidth; x++) {
+			if (qr.getModule(x, y))	 // black
 			{
-				if (qr.getModule(x, y)) // black
-				{
-					for (uint32 rectY = 0; rectY < ScaleY; rectY++)
-					{
-						for (uint32 rectX = 0; rectX < ScaleX; rectX++)
-						{
-							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3) = 0;//Blue
-							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 1) = 0;//Green
-							*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 2) = 0;//Red
-						}
+				for (uint32 rectY = 0; rectY < ScaleY; rectY++) {
+					for (uint32 rectX = 0; rectX < ScaleX; rectX++) {
+						*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3) = 0;			 // Blue
+						*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 1) = 0;	 // Green
+						*(QRCodeDestData + rectY * QRWidthAdjustedX * 3 + rectX * 3 + 2) = 0;	 // Red
 					}
 				}
-				QRCodeDestData += ScaleX * 3;
+			}
+			QRCodeDestData += ScaleX * 3;
+		}
+	}
+
+	auto scale_difference = Width - ScaleX;
+
+	TArray<uint8> ImageBGRAData;
+
+	for (uint32 i = 0; i < Width * Height * 4; i++) {
+		ImageBGRAData.Add(0xFF);
+	}
+	for (uint32 y = Margin; y < QRHeightAdjustedY + Margin; y++) {
+		for (uint32 x = Margin; x < QRWidthAdjustedX + Margin; x++) {
+			for (int32 PixelByte = 0; PixelByte < 3; PixelByte++) {
+				uint32 ImageIndex = (y * Width + x) * 4 + PixelByte;
+				uint32 RGBDataIndex = ((y - Margin) * QRWidthAdjustedX + (x - Margin)) * 3 + PixelByte;
+				ImageBGRAData[ImageIndex] = RGBData[RGBDataIndex];
 			}
 		}
+	}
 
-		auto scale_difference = Width - ScaleX;
-
-		TArray<uint8> ImageBGRAData;
-
-		for (uint32 i = 0; i < Width * Height * 4; i++)
-		{
-			ImageBGRAData.Add(0xFF);
-		}
-		for (uint32 y = Margin; y < QRHeightAdjustedY + Margin; y++)
-		{
-			for (uint32 x = Margin; x < QRWidthAdjustedX + Margin; x++)
-			{
-				for (int32 PixelByte = 0; PixelByte < 3; PixelByte++)
-				{
-					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
-					uint32 RGBDataIndex = ((y - Margin) * QRWidthAdjustedX + (x - Margin)) * 3 + PixelByte;
-					ImageBGRAData[ImageIndex] = RGBData[RGBDataIndex];
-				}
+	// Make the excess width/height have alpha to remove it, else there is excess white on the bottom/right for scale discrepancies.
+	for (uint32 y = QRHeightAdjustedY + Margin * 2; y < Height; y++) {
+		for (uint32 x = 0; x < Width; x++) {
+			for (int32 PixelByte = 0; PixelByte < 4; PixelByte++) {
+				uint32 ImageIndex = (y * Width + x) * 4 + PixelByte;
+				ImageBGRAData[ImageIndex] = 0x0;
 			}
 		}
+	}
 
-		// Make the excess width/height have alpha to remove it, else there is excess white on the bottom/right for scale discrepancies.
-		for (uint32 y = QRHeightAdjustedY + Margin * 2; y < Height; y++)
-		{
-			for (uint32 x = 0; x < Width; x++)
-			{
-				for (int32 PixelByte = 0; PixelByte < 4; PixelByte++)
-				{
-					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
-					ImageBGRAData[ImageIndex] = 0x0;
-				}
+	for (uint32 y = 0; y < Height; y++) {
+		for (uint32 x = QRWidthAdjustedX + Margin * 2; x < Width; x++) {
+			for (int32 PixelByte = 0; PixelByte < 4; PixelByte++) {
+				uint32 ImageIndex = (y * Width + x) * 4 + PixelByte;
+				ImageBGRAData[ImageIndex] = 0x0;
 			}
 		}
-
-		for (uint32 y = 0; y < Height; y++)
-		{
-			for (uint32 x = QRWidthAdjustedX + Margin * 2; x < Width; x++)
-			{
-				for (int32 PixelByte = 0; PixelByte < 4; PixelByte++)
-				{
-					uint32 ImageIndex = ( y * Width + x ) * 4 + PixelByte;
-					ImageBGRAData[ImageIndex] = 0x0;
-				}
-			}
-		}
+	}
 
 	IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
 	TSharedPtr<IImageWrapper> TargetImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::BMP);
-	if (TargetImageWrapper.IsValid())
-	{
+	if (TargetImageWrapper.IsValid()) {
 		texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
-		if (texture != nullptr)
-		{
+		if (texture != nullptr) {
 			FTexture2DMipMap& Mip = texture->PlatformData->Mips[0];
 			void* TextureData = Mip.BulkData.Lock(LOCK_READ_WRITE);
 			FMemory::Memcpy(TextureData, ImageBGRAData.GetData(), ImageBGRAData.Num());
@@ -489,32 +447,30 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(const int32& 
 	return texture;
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin /* = 10 */)
-{
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin /* = 10 */) {
 	return GenerateQRCodeTextureWithAmount(Size, account, "", Margin);
 }
 
-namespace
-{
-nano::public_key PrivateKeyToPublicKeyData (const FString& privateKey_f) {
-	nano::private_key private_key (TCHAR_TO_UTF8(*privateKey_f));
+namespace {
+nano::public_key PrivateKeyToPublicKeyData(const FString& privateKey_f) {
+	nano::private_key private_key(TCHAR_TO_UTF8(*privateKey_f));
 	nano::public_key public_key;
-	ed25519_publickey (private_key.bytes.data (), public_key.bytes.data ());
+	ed25519_publickey(private_key.bytes.data(), public_key.bytes.data());
 	return public_key;
 }
 
-nano::private_key SeedAccountPrvData (const FString& seed_f, int32 index) {
-	std::string seed_str (TCHAR_TO_UTF8(*seed_f));
-	nano::uint256_union seed (seed_str);
+nano::private_key SeedAccountPrvData(const FString& seed_f, int32 index) {
+	std::string seed_str(TCHAR_TO_UTF8(*seed_f));
+	nano::uint256_union seed(seed_str);
 	nano::private_key private_key;
-	nano::deterministic_key (seed, index, private_key);
+	nano::deterministic_key(seed, index, private_key);
 	return private_key;
 }
 
-nano::public_key SeedAccountPubData (const FString& seed, int32 index) {
-	auto private_key = SeedAccountPrvData (seed, index);
+nano::public_key SeedAccountPubData(const FString& seed, int32 index) {
+	auto private_key = SeedAccountPrvData(seed, index);
 	nano::public_key public_key;
-	ed25519_publickey (private_key.bytes.data (), public_key.bytes.data ());
+	ed25519_publickey(private_key.bytes.data(), public_key.bytes.data());
 	return public_key;
 }
-}
+}	 // namespace

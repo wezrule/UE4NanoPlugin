@@ -3,11 +3,7 @@
 #include "NanoTypes.generated.h"
 
 UENUM(BlueprintType)
- enum class FConfType : uint8 {
-	send_to,
-	send_from,
-	receive
-};
+enum class FConfType : uint8 { send_to, send_from, receive };
 
 USTRUCT(BlueprintType)
 struct NANO_API FGetBalanceRequestData {
@@ -20,7 +16,7 @@ struct NANO_API FGetBalanceRequestData {
 	bool include_only_confirmed{true};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GetBalance")
-	FString action {"account_balance"};
+	FString action{"account_balance"};
 };
 
 USTRUCT(BlueprintType)
@@ -37,7 +33,7 @@ struct NANO_API FGetBalanceResponseData {
 	FString pending;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GetBalance")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -62,7 +58,7 @@ struct NANO_API FWorkGenerateResponseData {
 	FString work;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WorkGenerate")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -102,7 +98,7 @@ struct NANO_API FAccountFrontierResponseData {
 	FString representative;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -125,10 +121,10 @@ struct NANO_API FPendingRequestData {
 	FString include_only_confirmed{"true"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
-	FString count {"5"};
+	FString count{"5"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
-	FString threshold {"0"};
+	FString threshold{"0"};
 };
 
 USTRUCT(BlueprintType)
@@ -153,10 +149,10 @@ struct NANO_API FPendingResponseData {
 	FString account;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
-	TArray <FPendingBlock> blocks;
+	TArray<FPendingBlock> blocks;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -164,10 +160,10 @@ struct NANO_API FBlockConfirmedResponseData {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
-	bool confirmed{ false };
+	bool confirmed{false};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
-	bool error { false };
+	bool error{false};
 };
 
 // This is needed for Blueprint by user
@@ -220,7 +216,7 @@ struct NANO_API FBlockRequestData {
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
 	FString link;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
 	FString link_as_account;
 
@@ -237,7 +233,7 @@ struct NANO_API FProcessRequestData {
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Process")
 	FString action{"process"};
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Process")
 	FBlockRequestData block;
 
@@ -250,10 +246,10 @@ struct NANO_API FBlockConfirmedRequestData {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
-	FString action {"block_info"};
+	FString action{"block_info"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
-	bool json_block {true};
+	bool json_block{true};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BlockConfirmed")
 	FString hash;
@@ -267,7 +263,7 @@ struct NANO_API FProcessResponseData {
 	FString hash;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Process")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -302,7 +298,7 @@ struct NANO_API FRequestNanoResponseData {
 	FString frontier;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ReceiveNano")
-	bool error {false};
+	bool error{false};
 };
 
 USTRUCT(BlueprintType)
@@ -331,10 +327,10 @@ struct NANO_API FAutomateResponseData {
 	FString representative;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Automate")
-	bool error {false};
+	bool error{false};
 };
 
-USTRUCT (BlueprintType)
+USTRUCT(BlueprintType)
 struct NANO_API FMakeBlockResponseData {
 	GENERATED_USTRUCT_BODY()
 
@@ -342,7 +338,7 @@ struct NANO_API FMakeBlockResponseData {
 	FBlock block;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MakeBlock")
-	bool error {false};
+	bool error{false};
 };
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FGetBalanceResponseReceivedDelegate, FGetBalanceResponseData, data);
@@ -372,18 +368,16 @@ struct NANO_API FSendArgs {
 	FString representative;
 };
 
-inline FString BytesToStringFixed(const uint8 *In, int32 Count)
-{
-    FString Broken = BytesToString(In, Count);
-    FString Fixed;
+inline FString BytesToStringFixed(const uint8* In, int32 Count) {
+	FString Broken = BytesToString(In, Count);
+	FString Fixed;
 
-    for (int i = 0; i < Broken.Len(); i++)
-    {
-        const TCHAR c = Broken[i] - 1;
-        Fixed.AppendChar(c);
-    }
+	for (int i = 0; i < Broken.Len(); i++) {
+		const TCHAR c = Broken[i] - 1;
+		Fixed.AppendChar(c);
+	}
 
-    return Fixed;
+	return Fixed;
 }
 
 // WEBSOCKETS

@@ -1,6 +1,6 @@
 // This connects to the nano node and subscribes to all confirmation callback responses via websocket.
 // For every block confirmed it will relay it to listening clients. Can be expensive if there are
-// many clients, consider only using it for things like TPS visualisers. 
+// many clients, consider only using it for things like TPS visualisers.
 const config = require("./config");
 
 const ReconnectingWebSocket = require("reconnecting-websocket");
@@ -53,6 +53,8 @@ ws.onerror = (e) => {
   console.log(e);
 };
 
-console.log(`[Expensive] All confirmation websocket server listening on: ws://${config.websocket_hostname}:${config.websocket.all_conf_host_port}`);
+console.log(
+  `[Expensive] All confirmation websocket server listening on: ws://${config.websocket_hostname}:${config.websocket.all_conf_host_port}`
+);
 
 module.exports = ws;

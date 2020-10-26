@@ -20,7 +20,7 @@ const ws_server = new WebSocket.Server({
 });
 
 ws.onopen = () => {
-  console.log ("Connected with node (manual registering of account)");
+  console.log("Connected with node (manual registering of account)");
 
   // This stores map<ws_connection, set<string>>. The set is accounts
   let ws_account_map = new Map();
@@ -150,6 +150,8 @@ ws.onerror = (e) => {
   console.log(e);
 };
 
-console.log(`Websocket server listening on: ws://${config.websocket_hostname}:${config.websocket.host_port}`);
+console.log(
+  `Websocket server listening on: ws://${config.websocket_hostname}:${config.websocket.host_port}`
+);
 
 module.exports = ws;

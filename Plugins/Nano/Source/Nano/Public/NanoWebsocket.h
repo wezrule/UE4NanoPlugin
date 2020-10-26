@@ -1,10 +1,9 @@
-#pragma once  
+#pragma once
 
-#include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "CoreMinimal.h"
+#include "IWebSocket.h"	 // Socket definition
 #include "Runtime/Online/HTTP/Public/Http.h"
-
-#include "IWebSocket.h"       // Socket definition
 
 #include "NanoWebsocket.generated.h"
 
@@ -13,20 +12,14 @@ struct NANO_API FWebsocketConnectResponseData {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConnect")
-	bool error {true};
+	bool error{true};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConnect")
 	FString errorMessage;
 };
 
 UENUM(BlueprintType)
- enum class FSubtype : uint8 {
-	send,
-	receive,
-	change,
-	epoch,
-	open
-};
+enum class FSubtype : uint8 { send, receive, change, epoch, open };
 
 // This is needed for Blueprint by user
 USTRUCT(BlueprintType)
@@ -57,7 +50,6 @@ struct NANO_API FWebsocketBlock {
 
 USTRUCT(BlueprintType)
 struct NANO_API FWebsocketConfirmationResponseData {
-	
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WebsocketConfirmationResponse")
@@ -77,28 +69,27 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FWebsocketConnectedDelegate, FWebsocketConnect
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketMessageResponseDelegate, const FWebsocketConfirmationResponseData&, data);
 
 UCLASS(BlueprintType, Blueprintable)
-class NANO_API UNanoWebsocket : public UObject
-{
+class NANO_API UNanoWebsocket : public UObject {
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
-	void RegisterAccount (const FString &account);
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void RegisterAccount(const FString& account);
 
-	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
-	void UnregisterAccount (const FString &account);
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void UnregisterAccount(const FString& account);
 
-	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
-	void Connect (const FString &url, FWebsocketConnectedDelegate delegate);
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void Connect(const FString& url, FWebsocketConnectedDelegate delegate);
 
 	UPROPERTY(BlueprintAssignable, Category = WebSocket)
 	FWebsocketMessageResponseDelegate onResponse;
 
-	UFUNCTION(BlueprintCallable, Category="UNanoWebsocket")
-	void ListenAllConfirmations ();
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void ListenAllConfirmations();
 
 protected:
-	void BeginDestroy () override;
+	void BeginDestroy() override;
 
 private:
 	TSharedPtr<IWebSocket> Websocket;
@@ -106,8 +97,6 @@ private:
 
 	bool isReconnection{false};
 
-	FCriticalSection mutex;
-
 	// TODO: Should use nano::account
-	TMap<FString, int> registeredAccounts; // account and number of times it was registered
+	TMap<FString, int> registeredAccounts;	// account and number of times it was registered
 };
