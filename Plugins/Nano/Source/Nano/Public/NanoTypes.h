@@ -5,7 +5,8 @@
 UENUM(BlueprintType)
 enum class FConfType : uint8 { send_to, send_from, receive };
 
-// IMPORTANT, all *RequestData objects must match the json keys on the server, which is why they underscores instead of lower camel case like the rest of the codebase.
+// IMPORTANT, all *RequestData objects must match the json keys on the server, which is why they underscores instead of lower camel
+// case like the rest of the codebase.
 
 USTRUCT(BlueprintType)
 struct NANO_API FGetBalanceRequestData {

@@ -514,7 +514,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 
 		// Check if this is a send from an account we are watching
 		auto account = data.block.account;
-		if (keyDelegateMap.count (TCHAR_TO_UTF8(*account)) > 0) {
+		if (keyDelegateMap.count(TCHAR_TO_UTF8(*account)) > 0) {
 			// This is a send from us to someone else
 			GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
 		}

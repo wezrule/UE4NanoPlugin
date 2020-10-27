@@ -90,9 +90,9 @@ public:
 	void BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash);
 
 	/**
-	* Create a send block and publish it. Calls delegate if there's no errors but doesn't wait for confirmation on the network (see
-	* SendWaitConfirmation)
-	*/
+	 * Create a send block and publish it. Calls delegate if there's no errors but doesn't wait for confirmation on the network (see
+	 * SendWaitConfirmation)
+	 */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Send(FProcessResponseReceivedDelegate delegate, FString const& privateKey, FString const& account, FString const& amount);
 
@@ -106,9 +106,9 @@ public:
 	void SendWaitConfirmationBlock(FProcessResponseReceivedDelegate delegate, FBlock block);
 
 	/**
-	* Automatically create send blocks for any pending blocks on this account, only call once per account!
-	* A websocket registration will happen automatically
-	*/
+	 * Automatically create send blocks for any pending blocks on this account, only call once per account!
+	 * A websocket registration will happen automatically
+	 */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AutomaticallyPocketRegister(
 		FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& privateKey, FString minimum = "0");
@@ -117,9 +117,9 @@ public:
 	void AutomaticallyPocketUnregister(const FString& account, UNanoWebsocket* websocket);
 
 	/**
-	* Registers an account for watching on websocket (needed for a variety of other functions). If there are other watchers it will
-	* just increment an id
-	*/
+	 * Registers an account for watching on websocket (needed for a variety of other functions). If there are other watchers it will
+	 * just increment an id
+	 */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
 	int32 Watch(const FWatchAccountReceivedDelegate& delegate, FString const& account, UNanoWebsocket* websocket);
 
@@ -127,7 +127,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Unwatch(FString const& account, const int32& id, UNanoWebsocket* websocket);
 
-	/** This needs to be called so that websocket responses for: listenpayment, automate pocketing and *WaitForConfirmation functions are picked up quicker. Very important for good UX! */
+	/** This needs to be called so that websocket responses for: listenpayment, automate pocketing and *WaitForConfirmation functions
+	 * are picked up quicker. Very important for good UX! */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetupFilteredConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
 

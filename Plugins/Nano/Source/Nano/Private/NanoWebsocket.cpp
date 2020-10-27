@@ -7,7 +7,7 @@
 #include "NanoTypes.h"
 #include "Runtime/Engine/Classes/Engine/World.h"
 #include "Runtime/Engine/Public/TimerManager.h"
-#include "WebSocketsModule.h"	 // Module definition
+#include "WebSocketsModule.h"
 
 #include <nano/blocks.h>
 #include <nano/numbers.h>
@@ -48,7 +48,7 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 		}
 
 		if (isListeningAll) {
-			ListenAll ();
+			ListenAll();
 		}
 
 		// This will run once connected.
@@ -127,7 +127,7 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 					if (isFiltered) {
 						onFilteredResponse.Broadcast(data);
 					} else {
-						onResponse.Broadcast(data);			
+						onResponse.Broadcast(data);
 					}
 				} else {
 					UE_LOG(LogTemp, Warning,
@@ -196,12 +196,12 @@ void UNanoWebsocket::UnregisterAccount(const FString& account) {
 	}
 }
 
-void UNanoWebsocket::ListenAll () {
+void UNanoWebsocket::ListenAll() {
 	Websocket->Send("{\"action\":\"listen_all\"}");
 	isListeningAll = true;
 }
 
-void UNanoWebsocket::UnlistenAll () {
+void UNanoWebsocket::UnlistenAll() {
 	Websocket->Send("{\"action\":\"unlisten_all\"}");
 	isListeningAll = false;
 }

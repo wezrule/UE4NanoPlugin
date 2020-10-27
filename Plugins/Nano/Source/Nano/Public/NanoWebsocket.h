@@ -83,15 +83,15 @@ public:
 	void UnregisterAccount(const FString& account);
 
 	/**
-	* This will attempt to connect to the websocket. On first successful connection,
-	* will keep trying to reconnect, will only call delegate once!
-	*/
+	 * This will attempt to connect to the websocket. On first successful connection,
+	 * will keep trying to reconnect, will only call delegate once!
+	 */
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
 	void Connect(const FString& url, FWebsocketConnectedDelegate delegate);
 
 	/** To save some initialization troubles Connect only calls the delegate once, if you
-	* require knowing if there is a reconnection, hook into this event
-	*/
+	 * require knowing if there is a reconnection, hook into this event
+	 */
 	UPROPERTY(BlueprintAssignable, Category = "UNanoWebsocket")
 	FWebsocketReconnectDelegate onReconnect;
 
@@ -104,10 +104,10 @@ public:
 	FWebsocketMessageResponseDelegate onResponse;
 
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
-	void ListenAll ();
+	void ListenAll();
 
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
-	void UnlistenAll ();
+	void UnlistenAll();
 
 protected:
 	void BeginDestroy() override;

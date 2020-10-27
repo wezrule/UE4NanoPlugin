@@ -157,7 +157,7 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
-	check (ValidateRaw (raw1) && ValidateRaw (raw2));
+	check(ValidateRaw(raw1) && ValidateRaw(raw2));
 
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
@@ -171,14 +171,14 @@ FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Subtract(FString raw1, FString raw2) {
-	check (GreaterOrEqual (raw1, raw2));
+	check(GreaterOrEqual(raw1, raw2));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
 
 	nano::amount amount2;
 	amount2.decode_dec(TCHAR_TO_UTF8(*raw2));
-	
-	check (amount2 < amount1);
+
+	check(amount2 < amount1);
 
 	nano::amount total = (amount1.number() - amount2.number());
 	return total.to_string_dec().c_str();
@@ -186,7 +186,7 @@ FString UNanoBlueprintLibrary::Subtract(FString raw1, FString raw2) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
-	check (ValidateRaw (raw) && ValidateRaw (baseRaw));
+	check(ValidateRaw(raw) && ValidateRaw(baseRaw));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
@@ -198,7 +198,7 @@ bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::GreaterOrEqual(FString raw, FString baseRaw) {
-	check (ValidateRaw (raw) && ValidateRaw (baseRaw));
+	check(ValidateRaw(raw) && ValidateRaw(baseRaw));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
@@ -450,25 +450,24 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, cons
 	return texture;
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureOnlyAccount(const int32& Size, const FString& account, int32 Margin /* = 10 */) {
-
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureOnlyAccount(
+	const int32& Size, const FString& account, int32 Margin /* = 10 */) {
 	FString qrString = "nano:" + account;
 	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey (const int32& Size, const FString& privateKey, int32 Margin) {
-
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey(const int32& Size, const FString& privateKey, int32 Margin) {
 	FString qrString = "nanokey:" + privateKey;
-	return GenerateQRCodeTexture (Size, qrString, Margin);
+	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
-
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
+	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
 	FString qrString = "nano:" + account;
 	if (amount != "") {
 		qrString += "?amount=" + amount;
 	}
-	return GenerateQRCodeTexture (Size, qrString, Margin);
+	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 
 namespace {
