@@ -2,36 +2,40 @@ console.log("Do not use in production!!!!!!!!!!!!");
 
 const express = require("express");
 const config = require("./config");
-const fetch = require("node-fetch")
+const fetch = require("node-fetch");
 const bodyParser = require("body-parser");
 const app = express();
 const hostname = config.hostname;
 const port = config.host_port;
 
-const nodeWs = require ("./websocket_node"); // Comment out if you don't need to register specific accounts for websocket confirmations.
+const nodeWs = require("./websocket_node");
 
-const nodeUrl = "http://" + config.node.rpc.address + ":" + config.node.rpc.port;
+const nodeUrl =
+  "http://" + config.node.rpc.address + ":" + config.node.rpc.port;
 
 // Send request to the RPC server of the node and record response
-const send = json_string => {
-	return new Promise( (resolve) => {
+const send = (json_string) => {
+  return new Promise((resolve) => {
     fetch(nodeUrl, {
-        method: 'POST',
-        body:    json_string,
-        headers: { 'Content-Type': 'application/json', "Accepts":"application/json" },
-	
+      method: "POST",
+      body: json_string,
+      headers: {
+        "Content-Type": "application/json",
+        Accepts: "application/json",
+      },
     })
-    .then(res => res.json())
-    .then(json => {
-        resolve (json);
-    }).catch(error => {
-	resolve({error: error});
-    })
-});
+      .then((res) => res.json())
+      .then((json) => {
+        resolve(json);
+      })
+      .catch((error) => {
+        resolve({ error: error });
+      });
+  });
 };
 
 const WS = require("ws");
- const ReconnectingWebSocket = require("reconnecting-websocket");
+const ReconnectingWebSocket = require("reconnecting-websocket");
 const dpow_wss = new ReconnectingWebSocket(config.dpow.ws_address, [], {
   WebSocket: WS,
   connectionTimeout: 1000,
@@ -50,29 +54,29 @@ dpow_wss.onopen = () => {
   dpow_wss.onmessage = (msg) => {
     let data_json = JSON.parse(msg.data);
     let value_l = dpow_request_map.get(data_json.id);
-    if (typeof value_l !== 'undefined') {
-    if (!data_json.hasOwnProperty("error")) {
-      let new_response = {};
-      new_response.work = data_json.work;
-      new_response.hash = value_l.hash;
-      value_l.res.json(new_response);
-    } else {
-      // dPOW failed to create us work, ask the node to generate it for us (TODO untested)
-      let request = {};
-      request.action = "work_generate";
-      request.hash = value_l.hash;
+    if (typeof value_l !== "undefined") {
+      if (!data_json.hasOwnProperty("error")) {
+        let new_response = {};
+        new_response.work = data_json.work;
+        new_response.hash = value_l.hash;
+        value_l.res.json(new_response);
+      } else {
+        // dPOW failed to create us work, ask the node to generate it for us (TODO untested)
+        let request = {};
+        request.action = "work_generate";
+        request.hash = value_l.hash;
 
-      send(JSON.stringify(request))
-        .then((rpc_response) => {
-          value_l.res.json(JSON.stringify(rpc_response));
-        })
-        .catch((e) => {
-          value_l.res.json({"error":"1"});
-        });
+        send(JSON.stringify(request))
+          .then((rpc_response) => {
+            value_l.res.json(JSON.stringify(rpc_response));
+          })
+          .catch((e) => {
+            value_l.res.json({ error: "1" });
+          });
+      }
+      delete dpow_request_map.get(data_json.id);
     }
-    delete dpow_request_map.get(data_json.id);
   };
-  }
 };
 
 app.use(bodyParser.json());
@@ -81,9 +85,9 @@ app.post("/", (req, res) => {
   res.setHeader("Content-Type", "application/json");
   let obj;
   try {
-	  obj = req.body;
+    obj = req.body;
   } catch (e) {
-	  res.json({"error":"malformed json request"});
+    res.json({ error: "malformed json request" });
     return;
   }
 
@@ -137,7 +141,7 @@ app.post("/", (req, res) => {
         );
       })
       .catch((e) => {
-        res.json({"error":"1"});
+        res.json({ error: "1" });
       });
   } else if (action == "work_generate" && config.dpow.enabled && using_dpow) {
     // Send to the dpow server and return the same request
@@ -158,19 +162,18 @@ app.post("/", (req, res) => {
     dpow_wss.send(JSON.stringify(dpow_request));
   } else if (allowed_actions.includes(action)) {
     // Just forward to RPC server. TODO: Should probably check for validity
-    send(JSON.stringify (obj))
-	.then((rpc_response_json) => {
-	res.json(rpc_response_json);
-	})
+    send(JSON.stringify(obj))
+      .then((rpc_response_json) => {
+        res.json(rpc_response_json);
+      })
       .catch((e) => {
-	      res.json({"error":"1"});
+        res.json({ error: "1" });
       });
   } else {
-    res.json({"error":"1"});
+    res.json({ error: "1" });
   }
 });
 
 app.listen(port, hostname, () => {
   console.log(`JSON-RPC server listening on port http://${hostname}:${port}`);
 });
-

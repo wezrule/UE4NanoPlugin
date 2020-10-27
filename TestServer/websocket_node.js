@@ -19,112 +19,105 @@ const ws_server = new WebSocket.Server({
   port: config.websocket.host_port,
 });
 
-  // This stores map<ws_connection, set<string>>. The set is accounts
-  let ws_account_map = new Map();
+// This stores map<ws_connection, set<string>>. The set is accounts
+let ws_account_map = new Map();
 
-  // This stores map<account, set<ws_connection>>;
-  let account_ws_map = new Map();
+// This stores map<account, set<ws_connection>>;
+let account_ws_map = new Map();
 
+// Listen for Unreal Engine clients connecting to us
+ws_server.on("connection", (client) => {
+  // Received a message from an Unreal Engine client
+  client.on("message", (message) => {
+    let json;
+    try {
+      json = JSON.parse(message);
+    } catch (err) {
+      return;
+    }
 
-  // Listen for Unreal Engine clients connecting to us
-  ws_server.on("connection", (client) => {
-    console.log("new client registered");
-    // Received a message from an Unreal Engine client
-    client.on("message", (message) => {
-      let json;
-      try {
-        json = JSON.parse(message);
-      } catch (err) {
-        return;
+    if (json.action == "register_account") {
+      if (ws_account_map.has(client)) {
+        ws_account_map.get(client).add(json.account);
+      } else {
+        ws_account_map.set(client, new Set());
+        ws_account_map.get(client).add(json.account);
       }
 
-      if (json.action == "register_account") {
-        if (ws_account_map.has(client)) {
-          ws_account_map.get(client).add(json.account);
-          console.log("111");
-        } else {
-          ws_account_map.set(client, new Set());
-          ws_account_map.get(client).add(json.account);
-          console.log("1122");
+      if (account_ws_map.has(json.account)) {
+        account_ws_map.get(json.account).add(client);
+      } else {
+        account_ws_map.set(json.account, new Set());
+        account_ws_map.get(json.account).add(client);
+      }
+
+      const confirmation_subscription_account_add = {
+        action: "update",
+        topic: "confirmation",
+        options: {
+          accounts_add: [json.account],
+        },
+      };
+
+      ws.send(JSON.stringify(confirmation_subscription_account_add));
+    } else if (json.action == "unregister_account") {
+      if (account_ws_map.has(json.account)) {
+        account_ws_map.get(json.account).delete(client);
+        if (account_ws_map.get(json.account).size == 0) {
+          account_ws_map.delete(json.account);
+          i;
         }
 
-        if (account_ws_map.has(json.account)) {
-          account_ws_map.get(json.account).add(client);
-          console.log("13232");
-        } else {
-          account_ws_map.set(json.account, new Set());
-          account_ws_map.get(json.account).add(client);
-          console.log("1111111");
+        ws_account_map.get(client).delete(json.account);
+        if (ws_account_map.get(client).size == 0) {
+          ws_account_map.delete(client);
         }
 
-        const confirmation_subscription_account_add = {
-          action: "update",
-          topic: "confirmation",
-          options: {
-            accounts_add: [json.account],
-          },
-        };
+        // Is this the last reference to this account?
+        if (account_ws_map.get(json.account).size == 0) {
+          const confirmation_subscription_account_delete = {
+            action: "update",
+            topic: "confirmation",
+            options: {
+              accounts_del: [json.account],
+            },
+          };
 
-        ws.send(JSON.stringify(confirmation_subscription_account_add));
-      } else if (json.action == "unregister_account") {
-        if (account_ws_map.has(json.account)) {
-          account_ws_map.get(json.account).delete(client);
-          if (account_ws_map.get(json.account).size == 0) {
-            account_ws_map.delete(json.account);
-            i;
-          }
-
-          ws_account_map.get(client).delete(json.account);
-          if (ws_account_map.get(client).size == 0) {
-            ws_account_map.delete(client);
-          }
-
-          // Is this the last reference to this account?
-          if (account_ws_map.get(json.account).size == 0) {
-            const confirmation_subscription_account_delete = {
-              action: "update",
-              topic: "confirmation",
-              options: {
-                accounts_del: [json.account],
-              },
-            };
-
-            ws.send(JSON.stringify(confirmation_subscription_account_delete));
-          }
+          ws.send(JSON.stringify(confirmation_subscription_account_delete));
         }
       }
-    });
-
-		// An UE client connection is lost
-    ws_server.on("close", (client) => {
-			// Loop through all accounts this connection was listening to and delete as appropriate. Unregister from node websocket subcription if there are no more listeners to this account
-	if (ws_account_map.has(client)) {
-        for (let account of ws_account_map.get(client)) {
-          account_ws_map.get(account).delete(client);
-          if (account_ws_map.get(account).size == 0) {
-						account_ws_map.delete(account);
-						
-            const confirmation_subscription_account_delete = {
-              action: "update",
-              topic: "confirmation",
-              options: {
-                accounts_del: [json.account],
-              },
-            };
-
-	console.log ("Unregister from client");
-
-            ws.send(JSON.stringify(confirmation_subscription_account_delete));
-          }
-
-          ws_account_map.get(client).delete(account);
-          if (ws_account_map.get(client).size == 0) {
-            ws_account_map.delete(client);
-          }
-        }
-      }
-    });
+    }
   });
+
+  // An UE client connection is lost
+  ws_server.on("close", (client) => {
+    // Loop through all accounts this connection was listening to and delete as appropriate.
+    // Unregister from node websocket subcription if there are no more listeners to this account
+    if (ws_account_map.has(client)) {
+      for (let account of ws_account_map.get(client)) {
+        account_ws_map.get(account).delete(client);
+        if (account_ws_map.get(account).size == 0) {
+          account_ws_map.delete(account);
+
+          const confirmation_subscription_account_delete = {
+            action: "update",
+            topic: "confirmation",
+            options: {
+              accounts_del: [json.account],
+            },
+          };
+
+          ws.send(JSON.stringify(confirmation_subscription_account_delete));
+        }
+
+        ws_account_map.get(client).delete(account);
+        if (ws_account_map.get(client).size == 0) {
+          ws_account_map.delete(client);
+        }
+      }
+    }
+  });
+});
 
 // Connected with the node
 ws.onopen = () => {
@@ -150,7 +143,6 @@ ws.onopen = () => {
       if (account_ws_map.has(data_json.message.account)) {
         for (const client of account_ws_map.get(data_json.message.account)) {
           clients.add(client);
-          console.log("client add");
         }
       }
       if (account_ws_map.has(data_json.message.block.link_as_account)) {
@@ -158,7 +150,6 @@ ws.onopen = () => {
           data_json.message.block.link_as_account
         )) {
           clients.add(client);
-          console.log("client add123");
         }
       }
 
@@ -186,13 +177,11 @@ if (config.allow_listen_all) {
     minReconnectionDelay: 10, // if not set, initial connection will take a few seconds by default
   });
 
-
-    // This stores all UE websocket clients which have connected to us
-    let clients = new Set();
+  // This stores all clients which want to listen to all websocket confirmations
+  let clients = new Set();
 
   ws_listen_all.onopen = () => {
     console.log("Connected with node (all confirmations)");
-
 
     // Subscribe to all confirmation callbacks
     const confirmation_subscription = {
@@ -229,25 +218,18 @@ if (config.allow_listen_all) {
         }
 
         if (json.action == "listen_all") {
-          if (!config.allow_listen_all) {
-            return;
-					}
-					clients.add (client);
+          clients.add(client);
         } else if (json.action == "unlisten_all") {
-          if (!config.allow_listen_all) {
-            return;
-					}
-					if (clients.has (client)) {
-						clients.delete (client);
-					}
+          if (clients.has(client)) {
+            clients.delete(client);
+          }
         }
       });
 
       ws_server.on("close", (client) => {
-				if (clients.has (client)) {
-					console.log ("cleared all conf client");
-					clients.delete (client);
-				}
+        if (clients.has(client)) {
+          clients.delete(client);
+        }
       });
     });
   };
