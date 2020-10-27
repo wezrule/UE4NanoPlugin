@@ -357,7 +357,7 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FMakeBlockDelegate, FMakeBlockResponseData, da
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWatchAccountReceivedDelegate, FAutomateResponseData, data);
 
-DECLARE_DYNAMIC_DELEGATE_OneParam(FListenPaymentDelegate, const FString&, hash);
+DECLARE_DYNAMIC_DELEGATE_TwoParams(FListenPaymentDelegate, const FString&, hash, const FString&, pendingAmount);
 
 inline FString BytesToStringFixed(const uint8* In, int32 Count) {
 	FString Broken = BytesToString(In, Count);

@@ -457,7 +457,7 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureOnlyAccount(
 }
 
 UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey(const int32& Size, const FString& privateKey, int32 Margin) {
-	FString qrString = "nanokey:" + privateKey;
+	FString qrString = privateKey.ToUpper();
 	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 

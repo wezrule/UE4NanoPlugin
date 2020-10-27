@@ -251,6 +251,9 @@ void UNanoManager::Unwatch(const FString& account, const int32& id, UNanoWebsock
 		auto delegate = map->Find(id);
 		if (delegate) {
 			map->Remove(id);
+			if (map->Num() == 0) {
+				watchers.Remove(account);
+			}
 			websocket->UnregisterAccount(account);
 		}
 	}
@@ -442,21 +445,26 @@ void UNanoManager::GetFrontierAndFireWatchers(const FString& amount, const FStri
 		[this, account, amount, hash, type](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 			auto frontierData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 
-			auto idDelegateMap = watchers.Find(TCHAR_TO_UTF8(*account));
+			auto idDelegateMap = watchers.Find(account);
 			if (idDelegateMap) {
+				// Copy delegates in case someone unwatches during this call
+				TArray<FWatchAccountReceivedDelegate> delegates;
+				for (auto delegate : *idDelegateMap) {
+					delegates.Add(delegate.Value);
+				}
 				if (!frontierData.error) {
 					// Form the output data
 					auto automateData = GetWebsocketResponseData(amount, hash, account, type, frontierData);
 
 					// Fire it back to the user
-					for (auto delegate : *idDelegateMap) {
-						delegate.Value.ExecuteIfBound(automateData);
+					for (auto delegate : delegates) {
+						delegate.ExecuteIfBound(automateData);
 					}
 				} else {
 					FAutomateResponseData data;
 					data.error = true;
-					for (auto delegate : *idDelegateMap) {
-						delegate.Value.ExecuteIfBound(data);
+					for (auto delegate : delegates) {
+						delegate.ExecuteIfBound(data);
 					}
 				}
 			}
@@ -519,6 +527,12 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 			GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
 		}
 
+		accountWatchers = watchers.Find(account);
+		if (accountWatchers) {
+			// We are just watching this so return the block (after getting account frontier information)
+			GetFrontierAndFireWatchers(data.amount, data.hash, account, FConfType::send_from);
+		}
+
 		// If we are listening for confirmations for this send block
 		auto hash_std_str = std::string(TCHAR_TO_UTF8(*data.hash));
 		auto it1 = sendBlockListener.find(hash_std_str);
@@ -533,7 +547,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 		if (listeningPayment.delegate.IsBound()) {
 			if (listeningPayment.account == linkAsAccount && listeningPayment.amount == data.amount) {
 				GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
-				listeningPayment.delegate.ExecuteIfBound(data.hash);
+				listeningPayment.delegate.ExecuteIfBound(data.hash, listeningPayment.amount);
 				listeningPayment.delegate.Unbind();
 			}
 		}
@@ -548,6 +562,12 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 			}
 
 			GetFrontierAndFire(data.amount, data.hash, account, FConfType::receive);
+		}
+
+		auto accountWatchers = watchers.Find(account);
+		if (accountWatchers) {
+			// We are just watching this so return the block (after getting account frontier information)
+			GetFrontierAndFireWatchers(data.amount, data.hash, account, FConfType::receive);
 		}
 	}
 }
@@ -748,7 +768,14 @@ void UNanoManager::MakeReceiveBlock(
 						FString(BaseConverter::HexToDecimalConverter().Convert(std::string(TCHAR_TO_UTF8(*str.ToUpper()))).c_str());
 
 					block.link = sourceHash;
-					block.previous = accountFrontierResponseData.hash;
+
+					// Set previous to 0 if this is an open block
+					if (thisAccountPublicKey == nano::account(TCHAR_TO_UTF8(*accountFrontierResponseData.hash))) {
+						block.previous = "0";
+					} else {
+						block.previous = accountFrontierResponseData.hash;
+					}
+
 					block.privateKey = privateKey;
 					block.representative = accountFrontierResponseData.representative;
 					block.work = workGenerateResponseData.work;
@@ -913,7 +940,7 @@ void UNanoManager::SingleUseAccountListenForPaymentWaitConfirmation(
 									listeningPayment.delegate.IsBound()) {
 								auto delegate = listeningPayment.delegate;
 								GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
-								delegate.ExecuteIfBound(pendingBlock.hash);
+								delegate.ExecuteIfBound(pendingBlock.hash, pendingBlock.amount);
 								delegate.Unbind();
 							}
 						}
