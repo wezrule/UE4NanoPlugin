@@ -73,20 +73,24 @@ class NANO_API UNanoWebsocket : public UObject {
 	GENERATED_BODY()
 
 public:
+	/** Register an account to listen to websocket confirmation events for **/
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
 	void RegisterAccount(const FString& account);
 
+	/** Unregister an account**/
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
 	void UnregisterAccount(const FString& account);
 
+	/**
+	* This will attempt to connect to the websocket. On first successful connection,
+	* will keep trying to reconnect
+	*/
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
 	void Connect(const FString& url, FWebsocketConnectedDelegate delegate);
 
+	/** This hooks onto all available websocket events */
 	UPROPERTY(BlueprintAssignable, Category = WebSocket)
 	FWebsocketMessageResponseDelegate onResponse;
-
-	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
-	void ListenAllConfirmations();
 
 protected:
 	void BeginDestroy() override;

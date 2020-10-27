@@ -20,6 +20,8 @@ bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano ("340282366.920938463463374607431768211455"));
 	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano ("0.1231231"));
 	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano (".1223"));
+	TestFalse (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano (".122.3"));
+	TestTrue (TEXT ("Exact nano nano number"), UNanoBlueprintLibrary::ValidateNano (",1223"));
 
 	TestTrue (TEXT ("100 raw is valid"), UNanoBlueprintLibrary::ValidateRaw ("100"));
 	TestTrue (TEXT ("Exactly max raw supply"), UNanoBlueprintLibrary::ValidateRaw ("340282366920938463463374607431768211455"));
@@ -88,6 +90,11 @@ bool FNanoBlueprintLibraryTest::RunTest(const FString& Parameters)
 	nano = TEXT ("0.000000000000000000000000000001");
 	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);
 	TestEqual (TEXT ("0.000000000000000000000000000001 Nano to raw"), raw, TEXT ("1"));
+
+	// Test localization of using a comma
+	nano = TEXT ("0,01");
+	raw  = UNanoBlueprintLibrary::NanoToRaw (nano);
+	TestEqual (TEXT ("0,01 Nano to raw"), raw, TEXT ("10000000000000000000000000000"));
 
 	// nano to raw (1 nano is 10^6 Nano)
 	auto Mnano = TEXT ("1");

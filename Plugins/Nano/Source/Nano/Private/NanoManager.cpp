@@ -54,11 +54,10 @@ void UNanoManager::RegisterBlockListener(std::string const& account, T const& re
 
 	auto blockHashStdStr = std::string(TCHAR_TO_UTF8(*responseData.hash));
 
+	// clang-format off
 	// Keep a mapping of automatic listening delegates
-	auto listenDelegate =
-		&(blockListener
-				.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(responseData, delegate))
-				.first->second);
+	auto listenDelegate = &(blockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(responseData, delegate)).first->second);
+	// clang-format on
 
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
 	GetWorld()->GetTimerManager().SetTimer(
@@ -69,8 +68,8 @@ void UNanoManager::RegisterBlockListener(std::string const& account, T const& re
 				// Get block_info, if confirmed call delegate, remove timer
 				BlockConfirmed(it->second.data.hash, [this, &blockListener, hash = it->second.data.hash](
 																							 FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-					auto block_confirmed_data = GetBlockConfirmedResponseData(request, response, wasSuccessful);
-					if (block_confirmed_data.confirmed) {
+					auto blockConfirmedData = GetBlockConfirmedResponseData(request, response, wasSuccessful);
+					if (blockConfirmedData.confirmed) {
 						auto it = blockListener.find(std::string(TCHAR_TO_UTF8(*hash)));
 						if (it != blockListener.cend()) {
 							auto delegate = it->second.delegate;
@@ -180,17 +179,14 @@ void UNanoManager::Process(
 
 	nano::account link(TCHAR_TO_UTF8(*block.link));
 
-	uint64_t work;
-	nano::from_string_hex(TCHAR_TO_UTF8(*block.previous), work);
-
-	nano::raw_key raw_key;
-	raw_key.data = nano::uint256_union(TCHAR_TO_UTF8(*block.private_key));
+	nano::raw_key rawKey;
+	rawKey.data = nano::uint256_union(TCHAR_TO_UTF8(*block.privateKey));
 
 	nano::block_hash previous(TCHAR_TO_UTF8(*block.previous));
 
-	auto public_key(nano::pub_key(raw_key.data));
+	auto publicKey = nano::pub_key(rawKey.data);
 
-	nano::state_block state_block(account, previous, representative, balance, link, raw_key, public_key);
+	nano::state_block stateBlock(account, previous, representative, balance, link, rawKey, publicKey);
 
 	FProcessRequestData processRequestData;
 	FBlockRequestData blockProcessRequestData;
@@ -199,7 +195,7 @@ void UNanoManager::Process(
 	blockProcessRequestData.previous = block.previous;
 	blockProcessRequestData.representative = block.representative;
 	blockProcessRequestData.link = link.to_string().c_str();
-	blockProcessRequestData.signature = state_block.block_signature().to_string().c_str();
+	blockProcessRequestData.signature = stateBlock.block_signature().to_string().c_str();
 	blockProcessRequestData.work = block.work;
 
 	processRequestData.block = blockProcessRequestData;
@@ -212,12 +208,12 @@ void UNanoManager::Process(
 void UNanoManager::ProcessWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block) {
 	// Register a block hash listener which will fire the delegate and remove it
 	Process(block, [this, block, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-		auto process_response_data = GetProcessResponseData(request, response, wasSuccessful);
-		if (!process_response_data.error) {
+		auto processResponseData = GetProcessResponseData(request, response, wasSuccessful);
+		if (!processResponseData.error) {
 			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate>(
-				TCHAR_TO_UTF8(*block.account), process_response_data, sendBlockListener, delegate);
+				TCHAR_TO_UTF8(*block.account), processResponseData, sendBlockListener, delegate);
 		} else {
-			delegate.ExecuteIfBound(process_response_data);
+			delegate.ExecuteIfBound(processResponseData);
 		}
 	});
 }
@@ -261,31 +257,31 @@ void UNanoManager::Unwatch(const FString& account, const int32& id, UNanoWebsock
 }
 
 void UNanoManager::AutomaticallyPocketRegister(
-	FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& private_key, FString minimum) {
-	check(!private_key.IsEmpty());
-	nano::raw_key prv_key;
-	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+	FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& privateKey, FString minimum) {
+	check(!privateKey.IsEmpty());
+	nano::raw_key prvKey;
+	prvKey.data = nano::uint256_union(TCHAR_TO_UTF8(*privateKey));
 
-	auto pub_key = nano::pub_key(prv_key.data);
+	auto pubKey = nano::pub_key(prvKey.data);
 
 	// Check you haven't already added it
-	check(keyDelegateMap.find(pub_key.to_account()) == keyDelegateMap.cend());
+	check(keyDelegateMap.find(pubKey.to_account()) == keyDelegateMap.cend());
 
-	websocket->RegisterAccount(pub_key.to_account().c_str());
+	websocket->RegisterAccount(pubKey.to_account().c_str());
 
 	// Keep a mapping of automatic listening delegates
-	auto prvKeyAutomateDelegate = &(keyDelegateMap
-																		.emplace(std::piecewise_construct, std::forward_as_tuple(pub_key.to_account()),
-																			std::forward_as_tuple(private_key, delegate, minimum))
-																		.first->second);
+	// clang-format off
+	auto prvKeyAutomateDelegate = &(keyDelegateMap.emplace(std::piecewise_construct, std::forward_as_tuple(pubKey.to_account()),
+															std::forward_as_tuple(privateKey, delegate, minimum)).first->second);
+	// clang-format on
 
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
 	GetWorld()->GetTimerManager().SetTimer(
 		prvKeyAutomateDelegate->timerHandle,
-		[this, pub_key, minimum]() {
-			auto it = keyDelegateMap.find(pub_key.to_account());
+		[this, pubKey, minimum]() {
+			auto it = keyDelegateMap.find(pubKey.to_account());
 			if (it != keyDelegateMap.end()) {
-				AutomatePocketPendingUtility(pub_key.to_account().c_str(), minimum);
+				AutomatePocketPendingUtility(pubKey.to_account().c_str(), minimum);
 			}
 		},
 		5.0f, true, 1.f);
@@ -295,7 +291,7 @@ void UNanoManager::AutomaticallyPocketUnregister(const FString& account, UNanoWe
 	// Remove timer (has to be the exact one, doesn't work if it's been copied.
 	auto it = keyDelegateMap.find(TCHAR_TO_UTF8(*account));
 	if (it != keyDelegateMap.cend()) {
-		if (!it->second.prv_key.IsEmpty()) {
+		if (!it->second.prvKey.IsEmpty()) {
 			GetWorld()->GetTimerManager().ClearTimer(it->second.timerHandle);
 		}
 		keyDelegateMap.erase(it);
@@ -351,11 +347,11 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 				nano::amount balance;
 				balance.decode_dec(TCHAR_TO_UTF8(*frontierData.balance));
 
-				auto new_balance = balance.number() + amount.number();
+				auto newBalance = balance.number() + amount.number();
 
 				FBlock block;
 				block.account = account.to_account().c_str();
-				auto str = new_balance.ToString();
+				auto str = newBalance.ToString();
 				str.RemoveFromStart(TEXT("0x"));
 				block.balance = FString(BaseConverter::HexToDecimalConverter().Convert(std::string(TCHAR_TO_UTF8(*str.ToUpper()))).c_str());
 				block.link = pendingBlock.hash;	 // source hash
@@ -369,7 +365,7 @@ void UNanoManager::AutomateWorkGenerateLoop(FAccountFrontierResponseData frontie
 
 				auto it = keyDelegateMap.find(TCHAR_TO_UTF8(*frontierData.account));
 				if (it != keyDelegateMap.end()) {
-					block.private_key = it->second.prv_key;
+					block.privateKey = it->second.prvKey;
 					block.representative = TCHAR_TO_UTF8(*frontierData.representative);
 					block.work = workData.work;
 
@@ -446,20 +442,20 @@ void UNanoManager::GetFrontierAndFireWatchers(const FString& amount, const FStri
 		[this, account, amount, hash, type](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 			auto frontierData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 
-			auto id_delegate_map = watchers.Find(TCHAR_TO_UTF8(*account));
-			if (id_delegate_map) {
+			auto idDelegateMap = watchers.Find(TCHAR_TO_UTF8(*account));
+			if (idDelegateMap) {
 				if (!frontierData.error) {
 					// Form the output data
 					auto automateData = GetWebsocketResponseData(amount, hash, account, type, frontierData);
 
 					// Fire it back to the user
-					for (auto delegate : *id_delegate_map) {
+					for (auto delegate : *idDelegateMap) {
 						delegate.Value.ExecuteIfBound(automateData);
 					}
 				} else {
 					FAutomateResponseData data;
 					data.error = true;
-					for (auto delegate : *id_delegate_map) {
+					for (auto delegate : *idDelegateMap) {
 						delegate.Value.ExecuteIfBound(data);
 					}
 				}
@@ -491,30 +487,29 @@ void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash
 void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data) {
 	// Need to determine if it's:
 	// 1 - Send to an account we are watching (we need to check pending, and fire off a loop to get these blocks (highest amount
-	// first), if above a certain amount) 2 - Send from an account we are watching (our balance goes down, check account_info) 3 -
-	// Receive (pocket) an account we are watching (no need to check pending, but need to check balance. But this could be an old
+	// first), if above a certain amount)
+	// 2 - Send from an account we are watching (our balance goes down, check account_info)
+	// 3 - Receive (pocket) an account we are watching (no need to check pending, but need to check balance. But this could be an old
 	// block, so need to check account_info balance)
 
 	// We could be monitoring multiple accounts which may be interacting with each other so need to check all
 	if (data.block.subtype == FSubtype::send) {
 		// Check if this is a send to an account we are watching
-		auto link_as_account =
+		auto linkAsAccount =
 			FString(nano::account(TCHAR_TO_UTF8(*data.block.link)).to_account().c_str());	 // Convert link as hash to account
-		{
-			auto it = keyDelegateMap.find(TCHAR_TO_UTF8(*link_as_account));
-			if (it != keyDelegateMap.end()) {
-				if (UNanoBlueprintLibrary::GreaterOrEqual(data.amount, it->second.minimum)) {
-					// Pocket the block, also check if there are more pending
-					AutomatePocketPendingUtility(link_as_account, it->second.minimum);
-				}
+
+		auto it = keyDelegateMap.find(TCHAR_TO_UTF8(*linkAsAccount));
+		if (it != keyDelegateMap.end()) {
+			if (UNanoBlueprintLibrary::GreaterOrEqual(data.amount, it->second.minimum)) {
+				// Pocket the block, also check if there are more pending
+				AutomatePocketPendingUtility(linkAsAccount, it->second.minimum);
 			}
 		}
-		{
-			auto account_watchers = watchers.Find(link_as_account);
-			if (account_watchers) {
-				// We are just watching this so return the block (after getting account frontier information)
-				GetFrontierAndFireWatchers(data.amount, data.hash, link_as_account, FConfType::send_to);
-			}
+
+		auto accountWatchers = watchers.Find(linkAsAccount);
+		if (accountWatchers) {
+			// We are just watching this so return the block (after getting account frontier information)
+			GetFrontierAndFireWatchers(data.amount, data.hash, linkAsAccount, FConfType::send_to);
 		}
 
 		// Check if this is a send from an account we are watching
@@ -538,7 +533,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 
 		// Are we listening for a payment? Only one of these will be active at once
 		if (listeningPayment.delegate.IsBound()) {
-			if (listeningPayment.account == link_as_account && listeningPayment.amount == data.amount) {
+			if (listeningPayment.account == linkAsAccount && listeningPayment.amount == data.amount) {
 				GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
 				listeningPayment.delegate.ExecuteIfBound(data.hash);
 				listeningPayment.delegate.Unbind();
@@ -573,37 +568,37 @@ void UNanoManager::BlockConfirmed(
 void UNanoManager::SendWaitConfirmationBlock(FProcessResponseReceivedDelegate delegate, FBlock block) {
 	Process(block, [this, delegate, account = nano::account(TCHAR_TO_UTF8(*block.link)).to_account()](
 									 FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-		auto process_response_data = GetProcessResponseData(request, response, wasSuccessful);
-		if (!process_response_data.error) {
+		auto processResponseData = GetProcessResponseData(request, response, wasSuccessful);
+		if (!processResponseData.error) {
 			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate>(
-				account, process_response_data, sendBlockListener, delegate);
+				account, processResponseData, sendBlockListener, delegate);
 		} else {
-			delegate.ExecuteIfBound(process_response_data);
+			delegate.ExecuteIfBound(processResponseData);
 		}
 	});
 }
 
 // This will only call the delegate after the send has been confirmed by the network. Requires a websocket connection
 void UNanoManager::SendWaitConfirmation(
-	FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
+	FProcessResponseReceivedDelegate delegate, FString const& privateKey, FString const& account, FString const& amount) {
 	// Register a block hash listener which will fire the delegate and remove it
-	Send(private_key, account, amount, [this, private_key, account, amount, delegate](FProcessResponseData process_response_data) {
-		if (!process_response_data.error) {
+	Send(privateKey, account, amount, [this, privateKey, account, amount, delegate](FProcessResponseData processResponseData) {
+		if (!processResponseData.error) {
 			// Register a block listener which will call the user delegate when a confirmation response from the network is received
-			nano::raw_key prv_key;
-			prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
-			auto pub_key = nano::pub_key(prv_key.data);
+			nano::raw_key prvKey;
+			prvKey.data = nano::uint256_union(TCHAR_TO_UTF8(*privateKey));
+			auto pubKey = nano::pub_key(prvKey.data);
 			RegisterBlockListener<FProcessResponseData, FProcessResponseReceivedDelegate>(
-				pub_key.to_account(), process_response_data, sendBlockListener, delegate);
+				pubKey.to_account(), processResponseData, sendBlockListener, delegate);
 		} else {
-			delegate.ExecuteIfBound(process_response_data);
+			delegate.ExecuteIfBound(processResponseData);
 		}
 	});
 }
 
-void UNanoManager::Send(FString const& private_key, FString const& account, FString const& amount,
-	TFunction<void(FProcessResponseData)> const& delegate) {
-	MakeSendBlock(private_key, amount, account, [delegate, this](FMakeBlockResponseData data) {
+void UNanoManager::Send(
+	FString const& privateKey, FString const& account, FString const& amount, TFunction<void(FProcessResponseData)> const& delegate) {
+	MakeSendBlock(privateKey, amount, account, [delegate, this](FMakeBlockResponseData data) {
 		if (!data.error) {
 			// Process the process
 			Process(data.block, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
@@ -620,34 +615,34 @@ void UNanoManager::Send(FString const& private_key, FString const& account, FStr
 // The will call the delegate when a send has been published, but not necessarily confirmed by the network yet, for ultimate
 // security use SendWaitConfirmation.
 void UNanoManager::Send(
-	FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount) {
-	Send(private_key, account, amount, [this, delegate](const FProcessResponseData& data) { delegate.ExecuteIfBound(data); });
+	FProcessResponseReceivedDelegate delegate, FString const& privateKey, FString const& account, FString const& amount) {
+	Send(privateKey, account, amount, [this, delegate](const FProcessResponseData& data) { delegate.ExecuteIfBound(data); });
 }
 
 void UNanoManager::MakeSendBlock(
-	FMakeBlockDelegate delegate, FString const& prvKey, FString const& amount, FString const& destination_account) {
+	FMakeBlockDelegate delegate, FString const& prvKey, FString const& amount, FString const& destinationAccount) {
 	MakeSendBlock(
-		prvKey, amount, destination_account, [this, delegate](const FMakeBlockResponseData& data) { delegate.ExecuteIfBound(data); });
+		prvKey, amount, destinationAccount, [this, delegate](const FMakeBlockResponseData& data) { delegate.ExecuteIfBound(data); });
 }
 
-void UNanoManager::MakeSendBlock(FString const& private_key, FString const& amount, FString const& destination_account,
+void UNanoManager::MakeSendBlock(FString const& privateKey, FString const& amount, FString const& destinationAccount,
 	TFunction<void(FMakeBlockResponseData)> const& delegate) {
 	// Need to construct the block myself
-	nano::raw_key prv_key;
-	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+	nano::raw_key prvKey;
+	prvKey.data = nano::uint256_union(TCHAR_TO_UTF8(*privateKey));
 
-	auto pub_key = nano::pub_key(prv_key.data);
+	auto pubKey = nano::pub_key(prvKey.data);
 
 	nano::account acc;
-	acc.decode_account(TCHAR_TO_UTF8(*destination_account));
+	acc.decode_account(TCHAR_TO_UTF8(*destinationAccount));
 
 	FSendArgs sendArgs;
-	sendArgs.private_key = private_key;
+	sendArgs.privateKey = privateKey;
 	sendArgs.account = acc.to_string().c_str();
 	sendArgs.amount = amount;
 
 	// Get the frontier
-	AccountFrontier(pub_key.to_account().c_str(),
+	AccountFrontier(pubKey.to_account().c_str(),
 		[this, sendArgs, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
 			auto accountFrontierResponseData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 			if (!accountFrontierResponseData.error) {
@@ -660,8 +655,8 @@ void UNanoManager::MakeSendBlock(FString const& private_key, FString const& amou
 					[this, sendArgs, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 						auto workGenerateResponseData = GetWorkGenerateResponseData(request, response, wasSuccessful);
 						if (workGenerateResponseData.hash != "0") {
-							auto prv_key = nano::uint256_union(TCHAR_TO_UTF8(*sendArgs.private_key));
-							auto this_account_public_key = (nano::pub_key(prv_key));
+							auto prvKey = nano::uint256_union(TCHAR_TO_UTF8(*sendArgs.privateKey));
+							auto thisAccountPublicKey = (nano::pub_key(prvKey));
 							nano::account acc(TCHAR_TO_UTF8(*sendArgs.account));
 
 							nano::amount bal;
@@ -671,7 +666,7 @@ void UNanoManager::MakeSendBlock(FString const& private_key, FString const& amou
 							amo.decode_dec(TCHAR_TO_UTF8(*sendArgs.amount));
 
 							FBlock block;
-							block.account = this_account_public_key.to_account().c_str();
+							block.account = thisAccountPublicKey.to_account().c_str();
 
 							auto str = (bal.number() - amo.number()).ToString();
 							str.RemoveFromStart(TEXT("0x"));
@@ -680,7 +675,7 @@ void UNanoManager::MakeSendBlock(FString const& private_key, FString const& amou
 
 							block.link = acc.to_string().c_str();
 							block.previous = sendArgs.frontier;
-							block.private_key = sendArgs.private_key;
+							block.privateKey = sendArgs.privateKey;
 							block.representative = sendArgs.representative;
 							block.work = workGenerateResponseData.work;
 
@@ -698,8 +693,8 @@ void UNanoManager::MakeSendBlock(FString const& private_key, FString const& amou
 }
 
 void UNanoManager::Receive(
-	const FProcessResponseReceivedDelegate& delegate, FString const& private_key, FString source_hash, FString const& amount) {
-	MakeReceiveBlock(private_key, source_hash, amount, [delegate, this](FMakeBlockResponseData data) {
+	const FProcessResponseReceivedDelegate& delegate, FString const& privateKey, FString sourceHash, FString const& amount) {
+	MakeReceiveBlock(privateKey, sourceHash, amount, [delegate, this](FMakeBlockResponseData data) {
 		if (!data.error) {
 			// Process the process
 			Process(data.block, [delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
@@ -714,58 +709,57 @@ void UNanoManager::Receive(
 }
 
 void UNanoManager::MakeReceiveBlock(
-	FMakeBlockDelegate delegate, FString const& private_key, FString source_hash, FString const& amount) {
+	FMakeBlockDelegate delegate, FString const& privateKey, FString sourceHash, FString const& amount) {
 	MakeReceiveBlock(
-		private_key, source_hash, amount, [this, delegate](const FMakeBlockResponseData& data) { delegate.ExecuteIfBound(data); });
+		privateKey, sourceHash, amount, [this, delegate](const FMakeBlockResponseData& data) { delegate.ExecuteIfBound(data); });
 }
 
 void UNanoManager::MakeReceiveBlock(
-	FString const& private_key, FString source_hash, FString const& amount, TFunction<void(FMakeBlockResponseData)> const& delegate) {
+	FString const& privateKey, FString sourceHash, FString const& amount, TFunction<void(FMakeBlockResponseData)> const& delegate) {
 	// Need to construct the block myself
-	nano::raw_key prv_key;
-	prv_key.data = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
+	nano::raw_key prvKey;
+	prvKey.data = nano::uint256_union(TCHAR_TO_UTF8(*privateKey));
 
-	auto pub_key = nano::pub_key(prv_key.data);
+	auto pubKey = nano::pub_key(prvKey.data);
 
 	// Get the frontier
-	AccountFrontier(pub_key.to_account().c_str(), [this, private_key, source_hash, amount, delegate](
-																									FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
+	AccountFrontier(pubKey.to_account().c_str(), [this, privateKey, sourceHash, amount, delegate](
+																								 FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) mutable {
 		auto accountFrontierResponseData = GetAccountFrontierResponseData(request, response, wasSuccessful);
 		if (!accountFrontierResponseData.error) {
 			// Generate work
-			WorkGenerate(
-				accountFrontierResponseData.hash, [this, private_key, source_hash, amount, delegate, accountFrontierResponseData](
-																						FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-					auto workGenerateResponseData = GetWorkGenerateResponseData(request, response, wasSuccessful);
-					if (workGenerateResponseData.hash != "0") {
-						auto prv_key = nano::uint256_union(TCHAR_TO_UTF8(*private_key));
-						auto this_account_public_key = (nano::pub_key(prv_key));
+			WorkGenerate(accountFrontierResponseData.hash, [this, privateKey, sourceHash, amount, delegate, accountFrontierResponseData](
+																											 FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+				auto workGenerateResponseData = GetWorkGenerateResponseData(request, response, wasSuccessful);
+				if (workGenerateResponseData.hash != "0") {
+					auto prvKey = nano::uint256_union(TCHAR_TO_UTF8(*privateKey));
+					auto thisAccountPublicKey = (nano::pub_key(prvKey));
 
-						nano::amount bal;
-						bal.decode_dec(TCHAR_TO_UTF8(*accountFrontierResponseData.balance));
+					nano::amount bal;
+					bal.decode_dec(TCHAR_TO_UTF8(*accountFrontierResponseData.balance));
 
-						nano::amount amo;
-						amo.decode_dec(TCHAR_TO_UTF8(*amount));
+					nano::amount amo;
+					amo.decode_dec(TCHAR_TO_UTF8(*amount));
 
-						FBlock block;
-						block.account = this_account_public_key.to_account().c_str();
+					FBlock block;
+					block.account = thisAccountPublicKey.to_account().c_str();
 
-						auto str = (bal.number() + amo.number()).ToString();
-						str.RemoveFromStart(TEXT("0x"));
-						block.balance =
-							FString(BaseConverter::HexToDecimalConverter().Convert(std::string(TCHAR_TO_UTF8(*str.ToUpper()))).c_str());
+					auto str = (bal.number() + amo.number()).ToString();
+					str.RemoveFromStart(TEXT("0x"));
+					block.balance =
+						FString(BaseConverter::HexToDecimalConverter().Convert(std::string(TCHAR_TO_UTF8(*str.ToUpper()))).c_str());
 
-						block.link = source_hash;
-						block.previous = accountFrontierResponseData.hash;
-						block.private_key = private_key;
-						block.representative = accountFrontierResponseData.representative;
-						block.work = workGenerateResponseData.work;
+					block.link = sourceHash;
+					block.previous = accountFrontierResponseData.hash;
+					block.privateKey = privateKey;
+					block.representative = accountFrontierResponseData.representative;
+					block.work = workGenerateResponseData.work;
 
-						FMakeBlockResponseData makeBlockData;
-						makeBlockData.block = block;
-						delegate(makeBlockData);
-					}
-				});
+					FMakeBlockResponseData makeBlockData;
+					makeBlockData.block = block;
+					delegate(makeBlockData);
+				}
+			});
 		} else {
 			FMakeBlockResponseData makeBlockData;
 			makeBlockData.error = true;
@@ -780,7 +774,7 @@ FRequestNanoResponseData UNanoManager::GetRequestNanoData(FHttpRequestPtr reques
 
 	data.account = reqRespJson.request->GetStringField("account");
 	data.amount = reqRespJson.response->GetStringField("amount");
-	data.src_hash = reqRespJson.response->GetStringField("send_hash");
+	data.srcHash = reqRespJson.response->GetStringField("send_hash");
 	data.frontier = reqRespJson.response->GetStringField("frontier");
 	return data;
 }
@@ -809,10 +803,10 @@ FAccountFrontierResponseData UNanoManager::GetAccountFrontierResponseData(
 			accountFrontierResponseData.error = true;
 		} else {
 			// Account could not be found, fill in with default values
-			nano::public_key public_key;
-			public_key.decode_account(TCHAR_TO_UTF8(*reqRespJson.request->GetStringField("account")));
+			nano::public_key publicKey;
+			publicKey.decode_account(TCHAR_TO_UTF8(*reqRespJson.request->GetStringField("account")));
 			accountFrontierResponseData.account = reqRespJson.request->GetStringField("account");
-			accountFrontierResponseData.hash = public_key.to_string().c_str();
+			accountFrontierResponseData.hash = publicKey.to_string().c_str();
 
 			accountFrontierResponseData.balance = "0";
 			accountFrontierResponseData.representative = defaultRepresentative;
@@ -883,54 +877,53 @@ FProcessResponseData UNanoManager::GetProcessResponseData(FHttpRequestPtr reques
 void UNanoManager::SingleUseAccountListenForPaymentWaitConfirmation(
 	FListenPaymentDelegate delegate, FString const& account, FString const& amount) {
 	// Check we are listening for websocket events for this account
-	{ check(keyDelegateMap.find(TCHAR_TO_UTF8(*account)) != keyDelegateMap.cend() || watchers.Find(account)); }
+	check(keyDelegateMap.find(TCHAR_TO_UTF8(*account)) != keyDelegateMap.cend() || watchers.Find(account));
 
-	{
-		// Clear timer if this payment exists already.
-		if (listeningPayment.delegate.IsBound()) {
-			GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
-		}
-		listeningPayment.account = account;
-		listeningPayment.amount = amount;
-		listeningPayment.delegate = delegate;
-		listeningPayment.timerHandle = FTimerHandle();
+	// Clear timer if this payment exists already.
+	if (listeningPayment.delegate.IsBound()) {
+		GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+	}
+	listeningPayment.account = account;
+	listeningPayment.amount = amount;
+	listeningPayment.delegate = delegate;
+	listeningPayment.timerHandle = FTimerHandle();
 
-		// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
-		GetWorld()->GetTimerManager().SetTimer(
-			listeningPayment.timerHandle,
-			[this, account]() {
-				if (listeningPayment.delegate.IsBound() && listeningPayment.account == account) {
-					// Get Pending blocks (minimum of amount)
+	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+	GetWorld()->GetTimerManager().SetTimer(
+		listeningPayment.timerHandle,
+		[this, account]() {
+			if (listeningPayment.delegate.IsBound() && listeningPayment.account == account) {
+				// Get Pending blocks (minimum of amount)
 
-					FPendingRequestData pendingRequestData;
-					pendingRequestData.account = account;
-					pendingRequestData.count = "1";
-					pendingRequestData.threshold = TCHAR_TO_UTF8(*listeningPayment.amount);
-					auto jsonObject = FJsonObjectConverter::UStructToJsonObject(pendingRequestData);
+				FPendingRequestData pendingRequestData;
+				pendingRequestData.account = account;
+				pendingRequestData.count = "1";
+				pendingRequestData.threshold = TCHAR_TO_UTF8(*listeningPayment.amount);
+				auto jsonObject = FJsonObjectConverter::UStructToJsonObject(pendingRequestData);
 
-					MakeRequest(jsonObject, [this, account](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-						auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
-						if (!pendingData.error && pendingData.blocks.Num() > 0) {
-							for (auto pendingBlock : pendingData.blocks) {
-								nano::amount amount;
-								amount.decode_dec(TCHAR_TO_UTF8(*pendingBlock.amount));
-								nano::amount amount1;
-								amount1.decode_dec(TCHAR_TO_UTF8(*listeningPayment.amount));
+				MakeRequest(jsonObject, [this, account](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+					auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
+					if (!pendingData.error && pendingData.blocks.Num() > 0) {
+						for (auto pendingBlock : pendingData.blocks) {
+							nano::amount pendingAmount;
+							pendingAmount.decode_dec(TCHAR_TO_UTF8(*pendingBlock.amount));
+							nano::amount listenAmount;
+							listenAmount.decode_dec(TCHAR_TO_UTF8(*listeningPayment.amount));
 
-								// Payment successful! clear and call delegate
-								if (amount1 == amount && listeningPayment.account == account && listeningPayment.delegate.IsBound()) {
-									auto delegate = listeningPayment.delegate;
-									GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
-									delegate.ExecuteIfBound(pendingBlock.hash);
-									delegate.Unbind();
-								}
+							// Payment successful! clear and call delegate
+							if ((pendingAmount > listenAmount || pendingAmount == listenAmount) && listeningPayment.account == account &&
+									listeningPayment.delegate.IsBound()) {
+								auto delegate = listeningPayment.delegate;
+								GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+								delegate.ExecuteIfBound(pendingBlock.hash);
+								delegate.Unbind();
 							}
 						}
-					});
-				};
-			},
-			5.0f, true, 1.f);
-	}
+					}
+				});
+			};
+		},
+		5.0f, true, 1.f);
 }
 
 TSharedRef<IHttpRequest> UNanoManager::CreateHttpRequest(TSharedPtr<FJsonObject> JsonObject) {
@@ -1001,7 +994,7 @@ FString UNanoManager::getDefaultDataPath() const {
 	WCHAR path[MAX_PATH];
 	if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path))) {
 		std::wstring string(path);
-		string += L"\\Nano_Games";
+		string += L"\\NanoGames";
 		result = string.c_str();
 	} else {
 		check(false);
@@ -1010,17 +1003,17 @@ FString UNanoManager::getDefaultDataPath() const {
 	NSString* dir_string = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
 	char const* dir_chars = [dir_string UTF8String];
 	std::string string(dir_chars);
-	string += "/Nano_Games";
+	string += "/NanoGames";
 	result = string.c_str();
 	[dir_string release];
 #elif PLATFORM_LINUX
 	auto entry(getpwuid(getuid()));
 	check(entry != nullptr);
 	std::string string(entry->pw_dir);
-	string += "/Nano_Games";
+	string += "/NanoGames";
 	result = string.c_str();
 #else
-	result = FPaths::ProjectSavedDir() / "Nano_Games";
+	result = FPaths::ProjectSavedDir() / "NanoGames";
 #endif
 
 	return result;

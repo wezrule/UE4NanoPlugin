@@ -16,14 +16,14 @@
 class PrvKeyAutomateDelegate {
 public:
 	PrvKeyAutomateDelegate() = default;
-	PrvKeyAutomateDelegate(const FString& prv_key, const FAutomateResponseReceivedDelegate& delegate, const FString& minimum)
-		: prv_key(prv_key), delegate(delegate), minimum(minimum) {
+	PrvKeyAutomateDelegate(const FString& prvKey, const FAutomateResponseReceivedDelegate& delegate, const FString& minimum)
+		: prvKey(prvKey), delegate(delegate), minimum(minimum) {
 	}
 
 	PrvKeyAutomateDelegate(const PrvKeyAutomateDelegate&) = delete;
 	PrvKeyAutomateDelegate& operator=(const PrvKeyAutomateDelegate&) = delete;
 
-	FString prv_key;
+	FString prvKey;
 	FAutomateResponseReceivedDelegate delegate;
 	FString minimum;
 	FTimerHandle timerHandle;
@@ -34,7 +34,7 @@ template <class ResponseData, class ResponseReceiveDelegate>
 class BlockListenerDelegate {
 public:
 	BlockListenerDelegate() = default;
-	BlockListenerDelegate(const ResponseData& data, const ResponseReceiveDelegate& delegate_) : delegate(delegate_), data(data) {
+	BlockListenerDelegate(const ResponseData& data, const ResponseReceiveDelegate& delegate) : delegate(delegate), data(data) {
 	}
 
 	BlockListenerDelegate(const BlockListenerDelegate&) = delete;
@@ -57,90 +57,97 @@ class NANO_API UNanoManager : public UObject {
 	GENERATED_BODY()
 
 public:
-	// Gets confirmed account balance and pending block balance
+	/** Gets confirmed account balance and pending block balance */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress);
 
-	// Generate work for this block hash
+	/** Generate work for this block hash */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void WorkGenerate(FWorkGenerateResponseReceivedDelegate delegate, FString hash);
 
-	// Process this block
+	/** Process this block */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Process(FProcessResponseReceivedDelegate delegate, FBlock block);
 
-	// Process this block, only calls event when the block is confirmed.
+	/** Process this block, only calls event when the block is confirmed. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void ProcessWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block);
 
-	// This relies on "request_nano" action being available on the rpc server
+	/** This relies on "request_nano" action being available on the rpc server */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress);
 
-	// Get the frontier of this block. If the account doesn't exist, it will be filled in with some default values.
+	/** Get the frontier of this block. If the account doesn't exist, it will be filled in with some default values. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AccountFrontier(FAccountFrontierResponseReceivedDelegate delegate, FString account);
 
-	// Get pending blocks for an account. Currently default to getting 5.
+	/** Get pending blocks for an account. Currently default to getting 5. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Pending(FPendingResponseReceivedDelegate delegate, FString account, FString threshold = "0", int32 maxCount = 100);
 
-	// Check if this block hash is confirmed by the network
+	/** Check if this block hash is confirmed by the network */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void BlockConfirmed(FBlockConfirmedResponseReceivedDelegate delegate, FString hash);
 
-	// Create a send block and publish it. Calls delegate if there's no errors but doesn't wait for confirmation on the network (see
-	// SendWaitConfirmation)
+	/**
+	* Create a send block and publish it. Calls delegate if there's no errors but doesn't wait for confirmation on the network (see
+	* SendWaitConfirmation)
+	*/
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void Send(FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
+	void Send(FProcessResponseReceivedDelegate delegate, FString const& privateKey, FString const& account, FString const& amount);
 
-	// Create a send block and publish it, only calls event when there is confirmation on the network.
+	/** Create a send block and publish it, only calls event when there is confirmation on the network. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SendWaitConfirmation(
-		FProcessResponseReceivedDelegate delegate, FString const& private_key, FString const& account, FString const& amount);
+		FProcessResponseReceivedDelegate delegate, FString const& privateKey, FString const& account, FString const& amount);
 
-	// Pass in a constructed send block and publish it, only calls event when there is confirmation on the network.
+	/** Pass in a constructed send block and publish it, only calls event when there is confirmation on the network. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SendWaitConfirmationBlock(FProcessResponseReceivedDelegate delegate, FBlock block);
 
-	// Can only be called once with this private key. A websocket registration will happen automatically
+	/**
+	* Automatically create send blocks for any pending blocks on this account, only call once per account!
+	* A websocket registration will happen automatically
+	*/
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AutomaticallyPocketRegister(
-		FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& private_key, FString minimum = "0");
+		FAutomateResponseReceivedDelegate delegate, UNanoWebsocket* websocket, FString const& privateKey, FString minimum = "0");
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void AutomaticallyPocketUnregister(const FString& account, UNanoWebsocket* websocket);
 
-	// Registers an account for watching on websocket (needed for a variety of other functions). If there are other watchers it will
-	// just increment an id.
+	/**
+	* Registers an account for watching on websocket (needed for a variety of other functions). If there are other watchers it will
+	* just increment an id
+	*/
 	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
 	int32 Watch(const FWatchAccountReceivedDelegate& delegate, FString const& account, UNanoWebsocket* websocket);
 
-	// Unregisters an account for watching on websocket. Will only remove from websocket if there are no other watchers.
+	/** Unregisters an account for watching on websocket. Will only remove from websocket if there are no other watchers. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Unwatch(FString const& account, const int32& id, UNanoWebsocket* websocket);
 
-	// This internally sets up the listeners so that all the delegates requiring them get called. Very important!
+	/** This needs to be called so that websocket responses for: listenpayment, automate pocketing and *WaitForConfirmation functions are picked up quicker. Very important for good UX! */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
 
-	// Checks pending blocks for a payment of a certain amount.
+	/** Checks pending blocks for a payment of a certain amount. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SingleUseAccountListenForPaymentWaitConfirmation(
 		FListenPaymentDelegate delegate, FString const& account, FString const& amount);
 
-	// Utility to construct a send block
+	/** Utility to construct a send block **/
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void MakeSendBlock(FMakeBlockDelegate delegate, FString const& prvKey, FString const& amount, FString const& destination_account);
+	void MakeSendBlock(FMakeBlockDelegate delegate, FString const& prvKey, FString const& amount, FString const& destinationAccount);
 
-	// Utility to construct a receive block
+	/** Utility to construct a receive block */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void MakeReceiveBlock(FMakeBlockDelegate delegate, FString const& private_key, FString source_hash, FString const& amount);
+	void MakeReceiveBlock(FMakeBlockDelegate delegate, FString const& privateKey, FString sourceHash, FString const& amount);
 
-	// Utility to receive a pending block
+	/** Utility to receive a pending block */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager", meta = (AutoCreateRefTerm = "delegate"))
 	void Receive(
-		const FProcessResponseReceivedDelegate& delegate, FString const& private_key, FString source_hash, FString const& amount);
+		const FProcessResponseReceivedDelegate& delegate, FString const& privateKey, FString sourceHash, FString const& amount);
 
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void SetDataSubdirectory(FString const& subdir);
@@ -198,14 +205,14 @@ private:
 
 	void WorkGenerate(FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
 
-	void Send(FString const& private_key, FString const& account, FString const& amount,
+	void Send(FString const& privateKey, FString const& account, FString const& amount,
 		TFunction<void(FProcessResponseData)> const& delegate);
 
 	template <class T, class T1>
 	void RegisterBlockListener(std::string const& account, T const& responseData,
 		std::unordered_map<std::string, BlockListenerDelegate<T, T1>>& blockListener, T1 delegate);
 
-	void MakeSendBlock(FString const& prvKey, FString const& amount, FString const& destination_account,
+	void MakeSendBlock(FString const& prvKey, FString const& amount, FString const& destinationAccount,
 		TFunction<void(FMakeBlockResponseData)> const& delegate);
 
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account, FString threshold, int32 maxCount);
@@ -235,12 +242,24 @@ private:
 	FAutomateResponseData GetWebsocketResponseData(const FString& amount, const FString& hash, FString const& account, FConfType type,
 		FAccountFrontierResponseData const& frontierData);
 
-	void MakeReceiveBlock(FString const& private_key, FString source_hash, FString const& amount,
-		TFunction<void(FMakeBlockResponseData)> const& delegate);
+	void MakeReceiveBlock(
+		FString const& privateKey, FString sourceHash, FString const& amount, TFunction<void(FMakeBlockResponseData)> const& delegate);
 
 	UFUNCTION()
 	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data);
 
 	FString getDefaultDataPath() const;
 	FString dataPath{getDefaultDataPath()};
+};
+
+USTRUCT()
+struct NANO_API FSendArgs {
+	GENERATED_USTRUCT_BODY()
+
+	FString privateKey;
+	FString account;
+	FString amount;
+	FString balance;
+	FString frontier;
+	FString representative;
 };

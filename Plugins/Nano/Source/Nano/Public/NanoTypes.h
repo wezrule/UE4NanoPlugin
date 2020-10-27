@@ -5,6 +5,8 @@
 UENUM(BlueprintType)
 enum class FConfType : uint8 { send_to, send_from, receive };
 
+// IMPORTANT, all *RequestData objects must match the json keys on the server, which is why they underscores instead of lower camel case like the rest of the codebase.
+
 USTRUCT(BlueprintType)
 struct NANO_API FGetBalanceRequestData {
 	GENERATED_USTRUCT_BODY()
@@ -121,7 +123,7 @@ struct NANO_API FPendingRequestData {
 	FString include_only_confirmed{"true"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
-	FString count{"5"};
+	FString count{"10"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Pending")
 	FString threshold{"0"};
@@ -187,7 +189,7 @@ struct NANO_API FBlock {
 	FString link;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
-	FString private_key;
+	FString privateKey;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Block")
 	FString work;
@@ -292,7 +294,7 @@ struct NANO_API FRequestNanoResponseData {
 	FString amount;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ReceiveNano")
-	FString src_hash;
+	FString srcHash;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ReceiveNano")
 	FString frontier;
@@ -356,18 +358,6 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FWatchAccountReceivedDelegate, FAutomateRespon
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FListenPaymentDelegate, const FString&, hash);
 
-USTRUCT()
-struct NANO_API FSendArgs {
-	GENERATED_USTRUCT_BODY()
-
-	FString private_key;
-	FString account;
-	FString amount;
-	FString balance;
-	FString frontier;
-	FString representative;
-};
-
 inline FString BytesToStringFixed(const uint8* In, int32 Count) {
 	FString Broken = BytesToString(In, Count);
 	FString Fixed;
@@ -402,27 +392,3 @@ struct NANO_API FUnRegisterAccountRequestData {
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UnRegisterAccount")
 	FString action = "unregister_account";
 };
-
-/*
-USTRUCT(BlueprintType)
-struct NANO_API FWatchAccountRequestData {
-	GENERATED_USTRUCT_BODY()
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WatchAccount")
-	FString account;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WatchAccount")
-	FString action = "watch_account";
-};
-
-USTRUCT(BlueprintType)
-struct NANO_API FUnRegisterAccountRequestData {
-	GENERATED_USTRUCT_BODY()
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UnWatchAccount")
-	FString account;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UnWatchAccount")
-	FString action = "unwatch_account";
-};
-*/

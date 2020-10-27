@@ -41,9 +41,9 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 
 	// Need to call all these before connecting (I think)
 	Websocket->OnConnected().AddLambda([delegate, this]() -> void {
-		for (auto const& account_num_pair : registeredAccounts) {
+		for (auto const& accountNumPair : registeredAccounts) {
 			FRegisterAccountRequestData registerAccount;
-			registerAccount.account = account_num_pair.Key;
+			registerAccount.account = accountNumPair.Key;
 			Websocket->Send(MakeOutputString(registerAccount));
 		}
 
@@ -73,43 +73,43 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 		}
 	});
 
-	Websocket->OnMessage().AddLambda([this](const FString& in_data) -> void {
-		TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(in_data);
+	Websocket->OnMessage().AddLambda([this](const FString& inData) -> void {
+		TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(inData);
 		TSharedPtr<FJsonObject> response;
 		if (FJsonSerializer::Deserialize(JsonReader, response)) {
 			// Only care about confirmation websocket events
 			auto topic = response->GetStringField("topic");
 			if (topic == "confirmation") {
-				auto message_json = response->GetObjectField("message");
+				auto messageJson = response->GetObjectField("message");
 
 				FWebsocketConfirmationResponseData data;
-				data.account = message_json->GetStringField("account");
-				data.amount = message_json->GetStringField("amount");
-				data.hash = message_json->GetStringField("hash");
+				data.account = messageJson->GetStringField("account");
+				data.amount = messageJson->GetStringField("amount");
+				data.hash = messageJson->GetStringField("hash");
 
-				auto block_json = message_json->GetObjectField("block");
+				auto blockJson = messageJson->GetObjectField("block");
 
-				data.block.account = block_json->GetStringField("account");
-				data.block.balance = block_json->GetStringField("balance");
-				data.block.link = block_json->GetStringField("link");
-				data.block.previous = block_json->GetStringField("previous");
-				data.block.representative = block_json->GetStringField("representative");
-				data.block.work = block_json->GetStringField("work");
+				data.block.account = blockJson->GetStringField("account");
+				data.block.balance = blockJson->GetStringField("balance");
+				data.block.link = blockJson->GetStringField("link");
+				data.block.previous = blockJson->GetStringField("previous");
+				data.block.representative = blockJson->GetStringField("representative");
+				data.block.work = blockJson->GetStringField("work");
 
-				auto subtype_str = block_json->GetStringField("subtype");
+				auto subtypeStr = blockJson->GetStringField("subtype");
 				// If there's no subtype, it means it's not a state block
-				if (!subtype_str.IsEmpty()) {
+				if (!subtypeStr.IsEmpty()) {
 					FSubtype subtype;
-					if (subtype_str == "send") {
+					if (subtypeStr == "send") {
 						subtype = FSubtype::send;
-					} else if (subtype_str == "receive") {
+					} else if (subtypeStr == "receive") {
 						subtype = FSubtype::receive;
-					} else if (subtype_str == "open") {
+					} else if (subtypeStr == "open") {
 						subtype = FSubtype::open;
-					} else if (subtype_str == "change") {
+					} else if (subtypeStr == "change") {
 						subtype = FSubtype::change;
 					} else {
-						check(subtype_str == "epoch");
+						check(subtypeStr == "epoch");
 						subtype = FSubtype::epoch;
 					}
 
@@ -181,9 +181,4 @@ void UNanoWebsocket::UnregisterAccount(const FString& account) {
 			Websocket->Send(OutputString);
 		}
 	}
-}
-
-// Do not mix this websocket object
-void UNanoWebsocket::ListenAllConfirmations() {
-	Websocket->Send("listen_all");
 }

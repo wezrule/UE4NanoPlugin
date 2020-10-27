@@ -60,7 +60,7 @@ bool UNanoBlueprintLibrary::ValidateNano(const FString& nano) {
 	for (auto i = 0; i < nano.Len(); ++i) {
 		auto c = nano[i];
 		if (!std::isdigit(c)) {
-			if (c == '.') {
+			if (c == '.' || c == ',') {
 				decimal_point_index = i;
 				++num_decimal_points;
 			} else {
@@ -83,7 +83,9 @@ bool UNanoBlueprintLibrary::ValidateNano(const FString& nano) {
 		FString integer_part;
 		FString fraction_part;
 		if (!nano.Split(".", &integer_part, &fraction_part) || integer_part.Len() > 9) {
-			return false;
+			if (!nano.Split(",", &integer_part, &fraction_part) || integer_part.Len() > 9) {
+				return false;
+			}
 		}
 
 		auto as_int = FCString::Atoi(*integer_part);
@@ -105,7 +107,7 @@ FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 	auto str = std::string(TCHAR_TO_UTF8(*nano));
 	auto it = str.begin();
 	for (; it < str.end(); ++it) {
-		if (*it == '.') {
+		if (*it == '.' || *it == ',') {
 			it = str.erase(it);
 			break;
 		}
@@ -155,6 +157,8 @@ FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
+	check (ValidateRaw (raw1) && ValidateRaw (raw2));
+
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
 
@@ -167,11 +171,14 @@ FString UNanoBlueprintLibrary::Add(FString raw1, FString raw2) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 FString UNanoBlueprintLibrary::Subtract(FString raw1, FString raw2) {
+	check (GreaterOrEqual (raw1, raw2));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw1));
 
 	nano::amount amount2;
 	amount2.decode_dec(TCHAR_TO_UTF8(*raw2));
+	
+	check (amount2 < amount1);
 
 	nano::amount total = (amount1.number() - amount2.number());
 	return total.to_string_dec().c_str();
@@ -179,6 +186,7 @@ FString UNanoBlueprintLibrary::Subtract(FString raw1, FString raw2) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
+	check (ValidateRaw (raw) && ValidateRaw (baseRaw));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
@@ -190,6 +198,7 @@ bool UNanoBlueprintLibrary::Greater(FString raw, FString baseRaw) {
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
 bool UNanoBlueprintLibrary::GreaterOrEqual(FString raw, FString baseRaw) {
+	check (ValidateRaw (raw) && ValidateRaw (baseRaw));
 	nano::amount amount1;
 	amount1.decode_dec(TCHAR_TO_UTF8(*raw));
 
