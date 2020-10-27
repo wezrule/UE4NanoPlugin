@@ -84,10 +84,10 @@ void UNanoManager::RegisterBlockListener(std::string const& account, T const& re
 		5.0f, true, 5.0f);
 }
 
-void UNanoManager::SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket) {
-	if (!websocket->onResponse.Contains(this, "OnConfirmationReceiveMessage")) {
+void UNanoManager::SetupFilteredConfirmationMessageWebsocketListener(UNanoWebsocket* websocket) {
+	if (!websocket->onFilteredResponse.Contains(this, "OnConfirmationReceiveMessage")) {
 		// Make sure to only call this once for the entirety of the program...
-		websocket->onResponse.AddDynamic(this, &UNanoManager::OnConfirmationReceiveMessage);
+		websocket->onFilteredResponse.AddDynamic(this, &UNanoManager::OnConfirmationReceiveMessage);
 	}
 }
 
@@ -514,9 +514,7 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 
 		// Check if this is a send from an account we are watching
 		auto account = data.block.account;
-
-		auto it = keyDelegateMap.find(TCHAR_TO_UTF8(*account));
-		if (it != keyDelegateMap.end()) {
+		if (keyDelegateMap.count (TCHAR_TO_UTF8(*account)) > 0) {
 			// This is a send from us to someone else
 			GetFrontierAndFire(data.amount, data.hash, account, FConfType::send_from);
 		}

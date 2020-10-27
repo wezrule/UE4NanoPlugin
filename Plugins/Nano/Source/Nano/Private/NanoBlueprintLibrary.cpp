@@ -361,17 +361,11 @@ FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& passwo
 }
 
 // A lot of this was taken from: https://github.com/hzm/QRCode
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
-	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& qrString, int32 Margin /* = 10 */) {
 	UTexture2D* texture = nullptr;
 
 	auto Width = (uint32) Size;
 	auto Height = (uint32) Size;
-
-	FString qrString = "nano:" + account;
-	if (amount != "") {
-		qrString += "?amount=" + amount;
-	}
 
 	// Create the QR Code object
 	auto qr = qrcodegen::QrCode::encodeText(TCHAR_TO_UTF8(*qrString), qrcodegen::QrCode::Ecc::MEDIUM);
@@ -456,8 +450,25 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
 	return texture;
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin /* = 10 */) {
-	return GenerateQRCodeTextureWithAmount(Size, account, "", Margin);
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureOnlyAccount(const int32& Size, const FString& account, int32 Margin /* = 10 */) {
+
+	FString qrString = "nano:" + account;
+	return GenerateQRCodeTexture(Size, qrString, Margin);
+}
+
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey (const int32& Size, const FString& privateKey, int32 Margin) {
+
+	FString qrString = "nanokey:" + privateKey;
+	return GenerateQRCodeTexture (Size, qrString, Margin);
+}
+
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
+
+	FString qrString = "nano:" + account;
+	if (amount != "") {
+		qrString += "?amount=" + amount;
+	}
+	return GenerateQRCodeTexture (Size, qrString, Margin);
 }
 
 namespace {

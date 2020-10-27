@@ -129,7 +129,7 @@ public:
 
 	/** This needs to be called so that websocket responses for: listenpayment, automate pocketing and *WaitForConfirmation functions are picked up quicker. Very important for good UX! */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void SetupConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
+	void SetupFilteredConfirmationMessageWebsocketListener(UNanoWebsocket* websocket);
 
 	/** Checks pending blocks for a payment of a certain amount. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")

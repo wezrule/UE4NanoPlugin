@@ -88,12 +88,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nano")
 	static FString Decrypt(FString cipherPrvKey, const FString& password);
 
-	/** Generate a QR Code of Width (Size) x Height (Size) */
-	UFUNCTION(BlueprintCallable, Category = "Nano")
-	static UTexture2D* GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin = 10);
-	
+	/** Generate a QR Code of Width (Size) x Height (Size) specifying an account to pay */
+	UTexture2D* GenerateQRCodeTextureOnlyAccount(const int32& Size, const FString& account, int32 Margin = 10);
+
 	/** Generate a QR code of Width (Size) x Height (Size) specifying an amount to pay as well */
 	UFUNCTION(BlueprintCallable, Category = "Nano")
 	static UTexture2D* GenerateQRCodeTextureWithAmount(
 		const int32& Size, const FString& account, const FString& amount, int32 Margin = 10);
+
+	/** Generate a QR code of Width (Size) x Height (Size) specifying a private key which can be imported by a wallet */
+	UFUNCTION(BlueprintCallable, Category = "Nano")
+	static UTexture2D* GenerateQRCodeTextureWithPrivateKey(const int32& Size, const FString& privateKey, int32 Margin = 10);
+
+private:
+	UFUNCTION(BlueprintCallable, Category = "Nano")
+	static UTexture2D* GenerateQRCodeTexture(const int32& Size, const FString& account, int32 Margin = 10);
 };

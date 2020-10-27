@@ -47,19 +47,27 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 			Websocket->Send(MakeOutputString(registerAccount));
 		}
 
+		if (isListeningAll) {
+			ListenAll ();
+		}
+
 		// This will run once connected.
-		FWebsocketConnectResponseData data;
-		data.error = false;
-		delegate.ExecuteIfBound(data);
+		if (!isReconnection) {
+			FWebsocketConnectResponseData data;
+			data.error = false;
+			delegate.ExecuteIfBound(data);
+		}
 	});
 
 	Websocket->OnConnectionError().AddLambda([delegate, this](const FString& errorMessage) -> void {
 		// This will run if the connection failed. Check Error to see what happened.
+		FWebsocketConnectResponseData data;
+		data.error = true;
+		data.errorMessage = errorMessage;
 		if (!isReconnection) {
-			FWebsocketConnectResponseData data;
-			data.error = true;
-			data.errorMessage = errorMessage;
 			delegate.ExecuteIfBound(data);
+		} else {
+			onReconnect.Broadcast(data);
 		}
 	});
 
@@ -115,7 +123,12 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 
 					data.block.subtype = subtype;
 
-					onResponse.Broadcast(data);
+					auto isFiltered = response->GetBoolField("is_filtered");
+					if (isFiltered) {
+						onFilteredResponse.Broadcast(data);
+					} else {
+						onResponse.Broadcast(data);			
+					}
 				} else {
 					UE_LOG(LogTemp, Warning,
 						TEXT("Receiving legacy confirmation callbacks, node is likely not synced yet so some operations will not work."));
@@ -181,4 +194,14 @@ void UNanoWebsocket::UnregisterAccount(const FString& account) {
 			Websocket->Send(OutputString);
 		}
 	}
+}
+
+void UNanoWebsocket::ListenAll () {
+	Websocket->Send("{\"action\":\"listen_all\"}");
+	isListeningAll = true;
+}
+
+void UNanoWebsocket::UnlistenAll () {
+	Websocket->Send("{\"action\":\"unlisten_all\"}");
+	isListeningAll = false;
 }

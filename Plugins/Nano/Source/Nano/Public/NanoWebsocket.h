@@ -67,6 +67,7 @@ struct NANO_API FWebsocketConfirmationResponseData {
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWebsocketConnectedDelegate, FWebsocketConnectResponseData, data);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketMessageResponseDelegate, const FWebsocketConfirmationResponseData&, data);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketReconnectDelegate, const FWebsocketConnectResponseData&, data);
 
 UCLASS(BlueprintType, Blueprintable)
 class NANO_API UNanoWebsocket : public UObject {
@@ -83,14 +84,30 @@ public:
 
 	/**
 	* This will attempt to connect to the websocket. On first successful connection,
-	* will keep trying to reconnect
+	* will keep trying to reconnect, will only call delegate once!
 	*/
 	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
 	void Connect(const FString& url, FWebsocketConnectedDelegate delegate);
 
+	/** To save some initialization troubles Connect only calls the delegate once, if you
+	* require knowing if there is a reconnection, hook into this event
+	*/
+	UPROPERTY(BlueprintAssignable, Category = "UNanoWebsocket")
+	FWebsocketReconnectDelegate onReconnect;
+
+	/** This hooks onto all the websocket events for registered accounts */
+	UPROPERTY(BlueprintAssignable, Category = "UNanoWebsocket")
+	FWebsocketMessageResponseDelegate onFilteredResponse;
+
 	/** This hooks onto all available websocket events */
-	UPROPERTY(BlueprintAssignable, Category = WebSocket)
+	UPROPERTY(BlueprintAssignable, Category = "UNanoWebsocket")
 	FWebsocketMessageResponseDelegate onResponse;
+
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void ListenAll ();
+
+	UFUNCTION(BlueprintCallable, Category = "UNanoWebsocket")
+	void UnlistenAll ();
 
 protected:
 	void BeginDestroy() override;
@@ -100,6 +117,7 @@ private:
 	FTimerHandle timerHandle;
 
 	bool isReconnection{false};
+	bool isListeningAll{false};
 
 	// TODO: Should use nano::account
 	TMap<FString, int> registeredAccounts;	// account and number of times it was registered
