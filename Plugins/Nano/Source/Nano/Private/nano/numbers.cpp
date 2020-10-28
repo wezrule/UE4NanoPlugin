@@ -1,3 +1,4 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include <nano/numbers.h>
 
 #include <baseconverter/base_converter.hpp>

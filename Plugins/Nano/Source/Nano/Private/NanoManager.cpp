@@ -1,12 +1,13 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include "NanoManager.h"
 
 #include "Engine.h"
+#include "Engine/World.h"
+#include "Http.h"
+#include "HttpModule.h"
 #include "Json.h"
 #include "JsonObjectConverter.h"
 #include "NanoBlueprintLibrary.h"
-#include "Runtime/Engine/Classes/Engine/World.h"
-#include "Runtime/Online/HTTP/Public/Http.h"
-#include "Runtime/Online/HTTP/Public/HttpModule.h"
 
 #include <ed25519-donna/ed25519.h>
 #include <nano/blocks.h>

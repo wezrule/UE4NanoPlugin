@@ -1,3 +1,4 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include <cstring>
 #include <fstream>
 #include "sha256.hpp"

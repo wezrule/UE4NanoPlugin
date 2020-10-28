@@ -1,8 +1,9 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Interfaces/IHttpRequest.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "Runtime/Online/HTTP/Public/Interfaces/IHttpRequest.h"
 
 #include "NanoBlueprintLibrary.generated.h"
 

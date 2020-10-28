@@ -1,9 +1,10 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #pragma once
 
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
-#include "IWebSocket.h"	 // Socket definition
-#include "Runtime/Online/HTTP/Public/Http.h"
+#include "IWebSocket.h"
+#include "Http.h"
 
 #include "NanoWebsocket.generated.h"
 

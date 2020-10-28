@@ -1,12 +1,13 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include "NanoWebsocket.h"
 
+#include "Engine/World.h"
 #include "Json.h"
 #include "JsonObjectConverter.h"
 #include "Modules/ModuleManager.h"
 #include "NanoBlueprintLibrary.h"
 #include "NanoTypes.h"
-#include "Runtime/Engine/Classes/Engine/World.h"
-#include "Runtime/Engine/Public/TimerManager.h"
+#include "TimerManager.h"
 #include "WebSocketsModule.h"
 
 #include <nano/blocks.h>

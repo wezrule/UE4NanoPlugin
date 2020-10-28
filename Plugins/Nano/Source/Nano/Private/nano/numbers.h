@@ -1,3 +1,4 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #pragma once
 
 #define _CRT_HAS_CXX17 0
@@ -5,7 +6,7 @@
 #pragma warning (disable : 4668 ) /* '__cplusplus' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif' Caused by Windows SDK bug */
 #endif
 
-#include "Runtime/Core/Public/Math/BigInt.h"
+#include "Math/BigInt.h"
 
 #include <array>
 #include <string>

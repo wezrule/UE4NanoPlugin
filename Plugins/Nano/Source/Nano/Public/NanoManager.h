@@ -1,11 +1,13 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #pragma once
 
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
+#include "GenericPlatform/GenericPlatformMisc.h"
+#include "Http.h"
 #include "NanoTypes.h"
 #include "NanoWebsocket.h"
-#include "Runtime/Core/Public/GenericPlatform/GenericPlatformMisc.h"
-#include "Runtime/Online/HTTP/Public/Http.h"
 
 #include <chrono>
 #include <functional>

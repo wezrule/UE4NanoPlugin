@@ -1,13 +1,12 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include "NanoBlueprintLibrary.h"
 
+#include "Engine/Texture2D.h"
 #include "HAL/FileManagerGeneric.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
-#include "ImageWrapper/Public/IImageWrapper.h"
+#include "Misc/AES.h"
 #include "Modules/ModuleManager.h"
-
-#include <Runtime/Core/Public/Misc/AES.h>
-#include <Runtime/Engine/Classes/Engine/Texture2D.h>
 
 #include <baseconverter/base_converter.hpp>
 #include <duthomhas/csprng.hpp>

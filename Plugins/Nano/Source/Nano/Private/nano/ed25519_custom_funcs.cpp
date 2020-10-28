@@ -1,3 +1,4 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #ifdef _WIN32
 #pragma warning (disable : 4804 ) /* '/': unsafe use of type 'bool' in operation warnings */
 #endif

@@ -1,3 +1,4 @@
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 // http://www.zedwood.com/article/cpp-sha256-function
 
 #ifndef SHA256_H
