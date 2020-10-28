@@ -7,6 +7,7 @@
 #include "Runtime/Core/Public/GenericPlatform/GenericPlatformMisc.h"
 #include "Runtime/Online/HTTP/Public/Http.h"
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -49,6 +50,16 @@ struct ListeningPayment {
 	FListenPaymentDelegate delegate;
 	FString account;
 	FString amount;
+	int32 watchId;
+	FTimerHandle timerHandle;
+};
+
+struct ListeningPayout {
+	FListenPayoutDelegate delegate;
+	float expiryTime;
+	std::chrono::steady_clock::time_point timerStart;
+	FString account;
+	int32 watchId;
 	FTimerHandle timerHandle;
 };
 
@@ -134,8 +145,23 @@ public:
 
 	/** Checks pending blocks for a payment of a certain amount. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void SingleUseAccountListenForPaymentWaitConfirmation(
-		FListenPaymentDelegate delegate, FString const& account, FString const& amount);
+	void ListenForPaymentWaitConfirmation(
+		FListenPaymentDelegate delegate, FString const& account, FString const& amount, UNanoWebsocket* websocket);
+
+	/** Cancel listening to a payment. */
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void CancelPayment(FString const& account, UNanoWebsocket* websocket);
+
+	/** Checks to see if the balance of this account is 0, will call delegate after expiry time (in seconds) is up too.
+	 * Automatically watches/unwatches this account.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void ListenPayoutWaitConfirmation(
+		const FListenPayoutDelegate& delegate, FString const& account, UNanoWebsocket* websocket, float expiryTime = 30.0f);
+
+	/** Cancel listening to a payout. */
+	UFUNCTION(BlueprintCallable, Category = "NanoManager")
+	void CancelPayout(FString const& account, UNanoWebsocket* websocket);
 
 	/** Utility to construct a send block **/
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
@@ -179,6 +205,7 @@ private:
 	std::unordered_map<std::string, BlockListenerDelegate<FAutomateResponseData, FAutomateResponseReceivedDelegate>>
 		receiveBlockListener;
 	ListeningPayment listeningPayment;
+	ListeningPayout listeningPayout;
 
 	struct ReqRespJson {
 		TSharedPtr<FJsonObject> request;
@@ -216,11 +243,16 @@ private:
 	void MakeSendBlock(FString const& prvKey, FString const& amount, FString const& destinationAccount,
 		TFunction<void(FMakeBlockResponseData)> const& delegate);
 
+	int32 Watch(FString const& account, UNanoWebsocket* websocket);
+
 	TSharedPtr<FJsonObject> GetPendingJsonObject(FString account, FString threshold, int32 maxCount);
 	static FPendingResponseData GetPendingResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 	static FGetBalanceResponseData GetBalanceResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 	static FProcessResponseData GetProcessResponseData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
 	static FRequestNanoResponseData GetRequestNanoData(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful);
+
+	void GetWalletBalance(
+		FString address, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate);
 
 	void BlockConfirmed(
 		FString hash, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& d);
@@ -247,7 +279,7 @@ private:
 		FString const& privateKey, FString sourceHash, FString const& amount, TFunction<void(FMakeBlockResponseData)> const& delegate);
 
 	UFUNCTION()
-	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data);
+	void OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data, UNanoWebsocket* websocket);
 
 	FString getDefaultDataPath() const;
 	FString dataPath{getDefaultDataPath()};

@@ -91,12 +91,17 @@ void UNanoManager::SetupFilteredConfirmationMessageWebsocketListener(UNanoWebsoc
 	}
 }
 
-void UNanoManager::GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress) {
+void UNanoManager::GetWalletBalance(
+	FString address, TFunction<void(FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful)> const& delegate) {
 	FGetBalanceRequestData getBalanceRequestData;
-	getBalanceRequestData.account = nanoAddress;
+	getBalanceRequestData.account = address;
 
 	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(getBalanceRequestData);
-	MakeRequest(JsonObject, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+	MakeRequest(JsonObject, delegate);
+}
+
+void UNanoManager::GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString address) {
+	GetWalletBalance(address, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 		delegate.ExecuteIfBound(GetBalanceResponseData(request, response, wasSuccessful));
 	});
 }
@@ -492,7 +497,7 @@ void UNanoManager::GetFrontierAndFire(const FString& amount, const FString& hash
 		});
 }
 
-void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data) {
+void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResponseData& data, UNanoWebsocket* websocket) {
 	// Need to determine if it's:
 	// 1 - Send to an account we are watching (we need to check pending, and fire off a loop to get these blocks (highest amount
 	// first), if above a certain amount)
@@ -546,11 +551,22 @@ void UNanoManager::OnConfirmationReceiveMessage(const FWebsocketConfirmationResp
 		// Are we listening for a payment? Only one of these will be active at once
 		if (listeningPayment.delegate.IsBound()) {
 			if (listeningPayment.account == linkAsAccount && listeningPayment.amount == data.amount) {
+				Unwatch(listeningPayment.account, listeningPayment.watchId, websocket);
 				GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
 				listeningPayment.delegate.ExecuteIfBound(data.hash, listeningPayment.amount);
 				listeningPayment.delegate.Unbind();
 			}
 		}
+
+		if (listeningPayout.delegate.IsBound()) {
+			if (listeningPayout.account == account && data.amount == "0") {
+				Unwatch(listeningPayment.account, listeningPayout.watchId, websocket);
+				GetWorld()->GetTimerManager().ClearTimer(listeningPayout.timerHandle);
+				listeningPayout.delegate.ExecuteIfBound(false);
+				listeningPayout.delegate.Unbind();
+			}
+		}
+
 	} else if (data.block.subtype == FSubtype::receive || data.block.subtype == FSubtype::open) {
 		auto account = data.account;
 		if (keyDelegateMap.count(TCHAR_TO_UTF8(*account)) > 0) {
@@ -899,56 +915,125 @@ FProcessResponseData UNanoManager::GetProcessResponseData(FHttpRequestPtr reques
 	return data;
 }
 
-void UNanoManager::SingleUseAccountListenForPaymentWaitConfirmation(
-	FListenPaymentDelegate delegate, FString const& account, FString const& amount) {
-	// Check we are listening for websocket events for this account
-	check(keyDelegateMap.find(TCHAR_TO_UTF8(*account)) != keyDelegateMap.cend() || watchers.Find(account));
-
+void UNanoManager::ListenForPaymentWaitConfirmation(
+	FListenPaymentDelegate delegate, FString const& account, FString const& amount, UNanoWebsocket* websocket) {
 	// Clear timer if this payment exists already.
 	if (listeningPayment.delegate.IsBound()) {
 		GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+		Unwatch(account, listeningPayment.watchId, websocket);
 	}
+
 	listeningPayment.account = account;
 	listeningPayment.amount = amount;
 	listeningPayment.delegate = delegate;
 	listeningPayment.timerHandle = FTimerHandle();
 
+	FWatchAccountReceivedDelegate emptyDelegate;
+	listeningPayment.watchId = Watch(emptyDelegate, account, websocket);
+
 	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
 	GetWorld()->GetTimerManager().SetTimer(
 		listeningPayment.timerHandle,
-		[this, account]() {
+		[this, account, websocket]() {
 			if (listeningPayment.delegate.IsBound() && listeningPayment.account == account) {
-				// Get Pending blocks (minimum of amount)
+				// Get a single pending block of at least the minimum amount, if there's there consider payment as going through!
+				Pending(account, TCHAR_TO_UTF8(*listeningPayment.amount), 1,
+					[this, account, websocket](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+						auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
+						if (!pendingData.error && pendingData.blocks.Num() > 0) {
+							for (auto pendingBlock : pendingData.blocks) {
+								nano::amount pendingAmount;
+								pendingAmount.decode_dec(TCHAR_TO_UTF8(*pendingBlock.amount));
+								nano::amount listenAmount;
+								listenAmount.decode_dec(TCHAR_TO_UTF8(*listeningPayment.amount));
 
-				FPendingRequestData pendingRequestData;
-				pendingRequestData.account = account;
-				pendingRequestData.count = "1";
-				pendingRequestData.threshold = TCHAR_TO_UTF8(*listeningPayment.amount);
-				auto jsonObject = FJsonObjectConverter::UStructToJsonObject(pendingRequestData);
-
-				MakeRequest(jsonObject, [this, account](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
-					auto pendingData = GetPendingResponseData(request, response, wasSuccessful);
-					if (!pendingData.error && pendingData.blocks.Num() > 0) {
-						for (auto pendingBlock : pendingData.blocks) {
-							nano::amount pendingAmount;
-							pendingAmount.decode_dec(TCHAR_TO_UTF8(*pendingBlock.amount));
-							nano::amount listenAmount;
-							listenAmount.decode_dec(TCHAR_TO_UTF8(*listeningPayment.amount));
-
-							// Payment successful! clear and call delegate
-							if ((pendingAmount > listenAmount || pendingAmount == listenAmount) && listeningPayment.account == account &&
-									listeningPayment.delegate.IsBound()) {
-								auto delegate = listeningPayment.delegate;
-								GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
-								delegate.ExecuteIfBound(pendingBlock.hash, pendingBlock.amount);
-								delegate.Unbind();
+								// Payment successful! clear and call delegate
+								if ((pendingAmount > listenAmount || pendingAmount == listenAmount) && listeningPayment.account == account &&
+										listeningPayment.delegate.IsBound()) {
+									auto delegate = listeningPayment.delegate;
+									Unwatch(account, listeningPayment.watchId, websocket);
+									GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+									delegate.ExecuteIfBound(pendingBlock.hash, pendingBlock.amount);
+									delegate.Unbind();
+								}
 							}
 						}
-					}
-				});
+					});
 			};
 		},
 		5.0f, true, 1.f);
+}
+
+void UNanoManager::CancelPayment(FString const& account, UNanoWebsocket* websocket) {
+	Unwatch(account, listeningPayment.watchId, websocket);
+	GetWorld()->GetTimerManager().ClearTimer(listeningPayment.timerHandle);
+
+	if (listeningPayment.delegate.IsBound()) {
+		listeningPayment.delegate.Unbind();
+	}
+}
+
+void UNanoManager::ListenPayoutWaitConfirmation(
+	const FListenPayoutDelegate& delegate, FString const& account, UNanoWebsocket* websocket, float expiryTime) {
+	// Clear timer if this payment exists already.
+	if (listeningPayout.delegate.IsBound()) {
+		GetWorld()->GetTimerManager().ClearTimer(listeningPayout.timerHandle);
+		Unwatch(account, listeningPayout.watchId, websocket);
+	}
+	listeningPayout.account = account;
+	listeningPayout.expiryTime = expiryTime;
+	listeningPayout.timerStart = std::chrono::steady_clock::now();
+	listeningPayout.delegate = delegate;
+	listeningPayout.timerHandle = FTimerHandle();
+
+	FWatchAccountReceivedDelegate emptyDelegate;
+	listeningPayout.watchId = Watch(emptyDelegate, account, websocket);
+
+	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+	GetWorld()->GetTimerManager().SetTimer(
+		listeningPayout.timerHandle,
+		[this, account, websocket]() {
+			if (listeningPayout.account == account) {
+				// First check if timer has expired
+
+				auto expired = std::chrono::steady_clock::now() - listeningPayout.timerStart >
+											 std::chrono::seconds(static_cast<int>(listeningPayout.expiryTime));
+				if (expired) {
+					GetWorld()->GetTimerManager().ClearTimer(listeningPayout.timerHandle);
+					Unwatch(account, listeningPayout.watchId, websocket);
+					if (listeningPayout.delegate.IsBound()) {
+						auto delegate = listeningPayout.delegate;
+						delegate.ExecuteIfBound(true);
+						delegate.Unbind();
+					}
+				} else {
+					// Check if balance is 0, if so then call delegate
+					GetWalletBalance(
+						account, [this, account, websocket](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
+							auto balanceResponseData = GetBalanceResponseData(request, response, wasSuccessful);
+							if (!balanceResponseData.error && balanceResponseData.balance == "0" && listeningPayout.account == account) {
+								Unwatch(account, listeningPayout.watchId, websocket);
+								if (listeningPayout.delegate.IsBound()) {
+									GetWorld()->GetTimerManager().ClearTimer(listeningPayout.timerHandle);
+									auto delegate = listeningPayout.delegate;
+									delegate.ExecuteIfBound(false);
+									delegate.Unbind();
+								}
+							}
+						});
+				}
+			}
+		},
+		5.0f, true, 1.f);
+}
+
+void UNanoManager::CancelPayout(FString const& account, UNanoWebsocket* websocket) {
+	Unwatch(account, listeningPayout.watchId, websocket);
+	GetWorld()->GetTimerManager().ClearTimer(listeningPayout.timerHandle);
+
+	if (listeningPayout.delegate.IsBound()) {
+		listeningPayout.delegate.Unbind();
+	}
 }
 
 TSharedRef<IHttpRequest> UNanoManager::CreateHttpRequest(TSharedPtr<FJsonObject> JsonObject) {

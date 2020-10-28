@@ -66,7 +66,8 @@ struct NANO_API FWebsocketConfirmationResponseData {
 };
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWebsocketConnectedDelegate, FWebsocketConnectResponseData, data);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketMessageResponseDelegate, const FWebsocketConfirmationResponseData&, data);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FWebsocketMessageResponseDelegate, const FWebsocketConfirmationResponseData&, data, UNanoWebsocket*, websocket);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWebsocketReconnectDelegate, const FWebsocketConnectResponseData&, data);
 
 UCLASS(BlueprintType, Blueprintable)

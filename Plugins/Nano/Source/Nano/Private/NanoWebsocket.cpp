@@ -125,9 +125,9 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 
 					auto isFiltered = response->GetBoolField("is_filtered");
 					if (isFiltered) {
-						onFilteredResponse.Broadcast(data);
+						onFilteredResponse.Broadcast(data, this);
 					} else {
-						onResponse.Broadcast(data);
+						onResponse.Broadcast(data, this);
 					}
 				} else {
 					UE_LOG(LogTemp, Warning,

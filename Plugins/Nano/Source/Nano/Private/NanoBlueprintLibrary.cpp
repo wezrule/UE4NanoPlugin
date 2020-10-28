@@ -7,6 +7,7 @@
 #include "Modules/ModuleManager.h"
 
 #include <Runtime/Core/Public/Misc/AES.h>
+#include <Runtime/Engine/Classes/Engine/Texture2D.h>
 
 #include <baseconverter/base_converter.hpp>
 #include <duthomhas/csprng.hpp>

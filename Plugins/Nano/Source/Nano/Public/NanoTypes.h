@@ -78,7 +78,7 @@ struct NANO_API FAccountFrontierRequestData {
 	FString pending{"true"};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
-	bool include_only_confirmed{true};
+	bool include_confirmed{true};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AccountFrontier")
 	FString action{"account_info"};
@@ -358,6 +358,8 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FMakeBlockDelegate, FMakeBlockResponseData, da
 DECLARE_DYNAMIC_DELEGATE_OneParam(FWatchAccountReceivedDelegate, FAutomateResponseData, data);
 
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FListenPaymentDelegate, const FString&, hash, const FString&, pendingAmount);
+
+DECLARE_DYNAMIC_DELEGATE_OneParam(FListenPayoutDelegate, bool, expired);
 
 inline FString BytesToStringFixed(const uint8* In, int32 Count) {
 	FString Broken = BytesToString(In, Count);
