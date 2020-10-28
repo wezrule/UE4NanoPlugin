@@ -1,9 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "Modules/ModuleManager.h"
 #include "NanoBlueprintLibrary.h"
 
-#include <Runtime/Core/Public/Misc/AutomationTest.h>
+#include <Misc/AutomationTest.h>
 
 #include <string>
 

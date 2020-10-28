@@ -1,6 +1,6 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
+// Copyright 2020 Wesley Shillingford. All rights reserved.
 #include "UENano.h"
+
 #include "Modules/ModuleManager.h"
 
-IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, UENano, "UENano" );
+IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, UENano, "UENano");

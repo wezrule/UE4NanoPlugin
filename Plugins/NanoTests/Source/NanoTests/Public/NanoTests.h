@@ -5,10 +5,8 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FNanoTestsModule : public IModuleInterface
-{
+class FNanoTestsModule : public IModuleInterface {
 public:
-
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;

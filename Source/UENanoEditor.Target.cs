@@ -5,10 +5,10 @@ using System.Collections.Generic;
 
 public class UENanoEditorTarget : TargetRules
 {
-	public UENanoEditorTarget(TargetInfo Target) : base(Target)
-	{
-		Type = TargetType.Editor;
+    public UENanoEditorTarget(TargetInfo Target) : base(Target)
+    {
+        Type = TargetType.Editor;
 
-		ExtraModuleNames.AddRange( new string[] { "UENano" } );
-	}
+        ExtraModuleNames.AddRange(new string[] { "UENano" });
+    }
 }

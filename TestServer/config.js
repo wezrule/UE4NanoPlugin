@@ -1,5 +1,8 @@
 let config = {};
 
+// If you don't need all websocket confirmations, then set this to false!
+config.allow_listen_all = true;
+
 // The host and port which calls from Unreal Engine plugin clients will call to access RPC commands indirectly and other things.
 // In the test level it uses a publically available server for simple testing, do not abuse it or you will be IP banned.
 // In this file it is configured to use localhost, update it to your remote server IP when launched there.
@@ -14,7 +17,8 @@ config.node = {};
 // Websocket address + port of the node. See config-node.toml config settings
 config.node.ws_address = "ws://[::1]:7078" // port 57000 for beta
 
-// Wallet which can be used for requesting Nano, like a faucet. Not required
+// Wallet which can be used for requesting Nano, like a faucet with the "request_nano" RPC.
+// Not required and the wallet/source will need to be updated to a wallet on your system.
 config.node.wallet = "5C9B72D16ACD64FFD49E420CF4CF962895C57FA679C589045B3B34C7CD98E59B";
 config.node.source = "nano_191o3sb8a3qhnnxcmrbc1y7urei73e3z7m9cg3bzwz4u5j4m43j9p76pwkcc"; 
 config.node.request_raw_amount = "1000000000000000000";
