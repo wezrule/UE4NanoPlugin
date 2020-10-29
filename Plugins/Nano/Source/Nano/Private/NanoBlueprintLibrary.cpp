@@ -29,7 +29,7 @@ nano::private_key SeedAccountPrvData(const FString& seed_f, int32 index);
 nano::public_key SeedAccountPubData(const FString& seed, int32 index);
 }	 // namespace
 
-bool UNanoBlueprintLibrary::ValidateRaw(const FString& raw) {
+bool UNanoBlueprintLibrary::ValidateRaw(FString raw) {
 	// Rudimentary check... it could still be above the largest raw value at 39 digits but shouldn't be a problem
 	if (raw.Len() > 39 || raw.IsEmpty()) {
 		return false;
@@ -48,7 +48,7 @@ bool UNanoBlueprintLibrary::ValidateRaw(const FString& raw) {
 }
 
 // Could probably use regex for some of this
-bool UNanoBlueprintLibrary::ValidateNano(const FString& nano) {
+bool UNanoBlueprintLibrary::ValidateNano(FString nano) {
 	if (nano.Len() > 40 || nano.IsEmpty()) {
 		return false;
 	}
@@ -100,7 +100,7 @@ bool UNanoBlueprintLibrary::ValidateNano(const FString& nano) {
 	return !error;
 }
 
-FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
+FString UNanoBlueprintLibrary::NanoToRaw(FString nano) {
 	check(ValidateNano(nano));
 
 	// Remove decimal point (if exists) and add necessary trailing 0s to form exact raw number
@@ -129,7 +129,7 @@ FString UNanoBlueprintLibrary::NanoToRaw(const FString& nano) {
 	return std::string(raw.begin() + start_index, raw.end()).c_str();
 }
 
-FString UNanoBlueprintLibrary::RawToNano(const FString& raw) {
+FString UNanoBlueprintLibrary::RawToNano(FString raw) {
 	check(ValidateRaw(raw));
 
 	// Insert a decimal 30 decimal places from the right
@@ -228,33 +228,33 @@ FString UNanoBlueprintLibrary::CreateSeed() {
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::PrivateKeyFromSeed(const FString& seed, int32 index) {
+FString UNanoBlueprintLibrary::PrivateKeyFromSeed(FString seed, int32 index) {
 	return SeedAccountPrvData(seed, index).to_string().c_str();
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::PublicKeyFromPrivateKey(const FString& privateKey) {
+FString UNanoBlueprintLibrary::PublicKeyFromPrivateKey(FString privateKey) {
 	return PrivateKeyToPublicKeyData(privateKey).to_string().c_str();
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::AccountFromPrivateKey(const FString& privateKey) {
+FString UNanoBlueprintLibrary::AccountFromPrivateKey(FString privateKey) {
 	return PrivateKeyToPublicKeyData(privateKey).to_account().c_str();
 }
 
 // As hex
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::PublicKeyFromSeed(const FString& seed, int32 index) {
+FString UNanoBlueprintLibrary::PublicKeyFromSeed(FString seed, int32 index) {
 	return SeedAccountPubData(seed, index).to_string().c_str();
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::AccountFromSeed(const FString& seed, int32 index) {
+FString UNanoBlueprintLibrary::AccountFromSeed(FString seed, int32 index) {
 	return SeedAccountPubData(seed, index).to_account().c_str();
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::PublicKeyFromAccount(const FString& account_f) {
+FString UNanoBlueprintLibrary::PublicKeyFromAccount(FString account_f) {
 	std::string account_str(TCHAR_TO_UTF8(*account_f));
 	nano::account account;
 	account.decode_account(account_str);
@@ -262,7 +262,7 @@ FString UNanoBlueprintLibrary::PublicKeyFromAccount(const FString& account_f) {
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::AccountFromPublicKey(const FString& publicKey) {
+FString UNanoBlueprintLibrary::AccountFromPublicKey(FString publicKey) {
 	nano::account account(TCHAR_TO_UTF8(*publicKey));
 	return account.to_account().c_str();
 }
@@ -274,7 +274,7 @@ FString UNanoBlueprintLibrary::SHA256(const FString& string) {
 
 // Encrypt/Decrypt both taken from https://kelheor.space/2018/11/12/how-to-encrypt-data-with-aes-256-in-ue4/
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& password) {
+FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, FString password) {
 	check(plainSeed.Len() == 64);
 	auto key = SHA256(password);
 
@@ -316,7 +316,7 @@ FString UNanoBlueprintLibrary::Encrypt(FString plainSeed, const FString& passwor
 }
 
 UFUNCTION(BlueprintCallable, Category = "Nano")
-FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& password) {
+FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, FString password) {
 	// Check inputs
 	if (cipherSeed.IsEmpty())
 		return "";
@@ -361,7 +361,7 @@ FString UNanoBlueprintLibrary::Decrypt(FString cipherSeed, const FString& passwo
 }
 
 // A lot of this was taken from: https://github.com/hzm/QRCode
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, const FString& qrString, int32 Margin /* = 10 */) {
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(int32 Size, FString qrString, int32 Margin /* = 10 */) {
 	UTexture2D* texture = nullptr;
 
 	auto Width = (uint32) Size;
@@ -451,18 +451,18 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTexture(const int32& Size, cons
 }
 
 UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureOnlyAccount(
-	const int32& Size, const FString& account, int32 Margin /* = 10 */) {
+	int32 Size, FString account, int32 Margin /* = 10 */) {
 	FString qrString = "nano:" + account;
 	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 
-UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey(const int32& Size, const FString& privateKey, int32 Margin) {
+UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithPrivateKey(int32 Size, FString privateKey, int32 Margin) {
 	FString qrString = privateKey.ToUpper();
 	return GenerateQRCodeTexture(Size, qrString, Margin);
 }
 
 UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
-	const int32& Size, const FString& account, const FString& amount, int32 Margin /* = 10 */) {
+	int32 Size, FString account, FString amount, int32 Margin /* = 10 */) {
 	FString qrString = "nano:" + account;
 	if (amount != "") {
 		qrString += "?amount=" + amount;
@@ -472,24 +472,24 @@ UTexture2D* UNanoBlueprintLibrary::GenerateQRCodeTextureWithAmount(
 
 namespace {
 nano::public_key PrivateKeyToPublicKeyData(const FString& privateKey_f) {
-	nano::private_key private_key(TCHAR_TO_UTF8(*privateKey_f));
-	nano::public_key public_key;
-	ed25519_publickey(private_key.bytes.data(), public_key.bytes.data());
-	return public_key;
+	nano::private_key privateKey(TCHAR_TO_UTF8(*privateKey_f));
+	nano::public_key publicKey;
+	ed25519_publickey(privateKey.bytes.data(), publicKey.bytes.data());
+	return publicKey;
 }
 
 nano::private_key SeedAccountPrvData(const FString& seed_f, int32 index) {
 	std::string seed_str(TCHAR_TO_UTF8(*seed_f));
 	nano::uint256_union seed(seed_str);
-	nano::private_key private_key;
-	nano::deterministic_key(seed, index, private_key);
-	return private_key;
+	nano::private_key privateKey;
+	nano::deterministic_key(seed, index, privateKey);
+	return privateKey;
 }
 
 nano::public_key SeedAccountPubData(const FString& seed, int32 index) {
 	auto private_key = SeedAccountPrvData(seed, index);
-	nano::public_key public_key;
-	ed25519_publickey(private_key.bytes.data(), public_key.bytes.data());
-	return public_key;
+	nano::public_key publicKey;
+	ed25519_publickey(private_key.bytes.data(), publicKey.bytes.data());
+	return publicKey;
 }
 }	 // namespace

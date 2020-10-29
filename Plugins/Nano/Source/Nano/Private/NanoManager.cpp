@@ -225,10 +225,10 @@ void UNanoManager::ProcessSendWaitConfirmation(FProcessResponseReceivedDelegate 
 }
 
 // Used only be used for development if the server supports it (unless you want a faucet).
-void UNanoManager::RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress) {
+void UNanoManager::RequestNano(FReceivedNanoDelegate delegate, FString account) {
 	// Ask server for Nano
 	FRequestNanoData requestNanoData;
-	requestNanoData.account = nanoAddress;
+	requestNanoData.account = account;
 
 	TSharedPtr<FJsonObject> JsonObject = FJsonObjectConverter::UStructToJsonObject(requestNanoData);
 	MakeRequest(JsonObject, [this, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {

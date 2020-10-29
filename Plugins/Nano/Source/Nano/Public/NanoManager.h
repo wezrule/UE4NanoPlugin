@@ -72,7 +72,7 @@ class NANO_API UNanoManager : public UObject {
 public:
 	/** Gets confirmed account balance and pending block balance */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString nanoAddress);
+	void GetWalletBalance(FGetBalanceResponseReceivedDelegate delegate, FString address);
 
 	/** Generate work for this block hash */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
@@ -88,7 +88,7 @@ public:
 
 	/** This relies on "request_nano" action being available on the rpc server */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void RequestNano(FReceivedNanoDelegate delegate, FString nanoAddress);
+	void RequestNano(FReceivedNanoDelegate delegate, FString address);
 
 	/** Get the frontier of this block. If the account doesn't exist, it will be filled in with some default values. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
