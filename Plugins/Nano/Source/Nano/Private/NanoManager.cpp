@@ -60,7 +60,7 @@ void UNanoManager::RegisterBlockListener(std::string const& account, T const& re
 	auto listenDelegate = &(blockListener.emplace(std::piecewise_construct, std::forward_as_tuple(blockHashStdStr), std::forward_as_tuple(responseData, delegate)).first->second);
 	// clang-format on
 
-	// Set it up to check for pending blocks every few seconds in case the websocket connection has missed any
+	// Set it up to check if the block is confirmed every few seconds in case the websocket connection has missed any
 	GetWorld()->GetTimerManager().SetTimer(
 		listenDelegate->timerHandle,
 		[this, &blockListener, hash = listenDelegate->data.hash]() {
@@ -211,7 +211,7 @@ void UNanoManager::Process(
 }
 
 // This will only call the delegate after the process has been confirmed by the network. Requires a websocket connection
-void UNanoManager::ProcessWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block) {
+void UNanoManager::ProcessSendWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block) {
 	// Register a block hash listener which will fire the delegate and remove it
 	Process(block, [this, block, delegate](FHttpRequestPtr request, FHttpResponsePtr response, bool wasSuccessful) {
 		auto processResponseData = GetProcessResponseData(request, response, wasSuccessful);

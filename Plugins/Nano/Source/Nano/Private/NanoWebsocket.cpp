@@ -41,6 +41,8 @@ void UNanoWebsocket::Connect(const FString& wsURL, FWebsocketConnectedDelegate d
 	Websocket = FWebSocketsModule::Get().CreateWebSocket(wsURL, TEXT("ws"));
 
 	// Need to call all these before connecting (I think)
+
+	// This is when a connection is successfully made.
 	Websocket->OnConnected().AddLambda([delegate, this]() -> void {
 		for (auto const& accountNumPair : registeredAccounts) {
 			FRegisterAccountRequestData registerAccount;

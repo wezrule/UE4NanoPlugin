@@ -82,9 +82,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
 	void Process(FProcessResponseReceivedDelegate delegate, FBlock block);
 
-	/** Process this block, only calls event when the block is confirmed. */
+	/** Process this send block, only calls event when the block is confirmed. */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
-	void ProcessWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block);
+	void ProcessSendWaitConfirmation(FProcessResponseReceivedDelegate delegate, FBlock block);
 
 	/** This relies on "request_nano" action being available on the rpc server */
 	UFUNCTION(BlueprintCallable, Category = "NanoManager")
