@@ -26,7 +26,7 @@ The test level:
 5. `./server.js`
 
 A nano node is required to be running which the websocket & http server (for RPC request) will talk with. Websocket & RPC should be enabled in the `node-config.toml` nano file. 
-A http server (for RPC requests) is definitely needed for communicating with the nano node via JSON-RPC, a test node.js server is supplied for this called `server.js`. A websocket server to receive notifications from nano network is highly recommended to make the most use of the plugin functionality. Another test server called `websocket_node.js` is supplied for this, both are found in the ./TestServer directory. Running `server.js` will also run `websocket_node.js`. The websocket script makes 2 connections to the node, 1 is filtered output and 1 gets all websocket events (usual for visualisers). If you only need filtered output (recommended!) then disable `allow_listen_all=false` in `config.js`. T  
+A http server (for RPC requests) is definitely needed for communicating with the nano node via JSON-RPC, a test node.js server is supplied for this called `server.js`. A websocket server to receive notifications from nano network is highly recommended to make the most use of the plugin functionality. Another test server called `websocket_node.js` is supplied for this, both are found in the ./TestServer directory. Running `server.js` will also run `websocket_node.js`. The websocket script makes 2 connections to the node, 1 is filtered output and 1 gets all websocket events (usual for visualisers). If you only need filtered output (recommended!) then disable `allow_listen_all=false` in `config.js`.  
 
 `NanoBlueprintLibrary.cpp` contains various generic functions such as creating seeds, encrypting/decrypting them using AES with a password, converting to accounts, converting between Raw and Nano and various other things.  
 `NanoWebsocket.cpp` maintains the websocket connection to the proxies.
@@ -144,7 +144,10 @@ Limitations
 
 Working on various other platforms:  
 ![AndroidPlay](https://user-images.githubusercontent.com/650038/97642692-b6f88680-1a3d-11eb-886e-aa5d97fa5bef.png)  
-![MacEditor](https://user-images.githubusercontent.com/650038/97642718-c677cf80-1a3d-11eb-82cc-9b660abb6ab7.png)  
 ![Screenshot from 2020-10-29 17-42-33](https://user-images.githubusercontent.com/650038/97679453-2ea1d200-1a8d-11eb-9898-c1929fdac4c5.png)
+![MacEditor](https://user-images.githubusercontent.com/650038/97642718-c677cf80-1a3d-11eb-82cc-9b660abb6ab7.png)  
 
 You can of course also use this in C++ projects.
+
+Any donation contributions are welcome: nano_15qry5fsh4mjbsgsqj148o8378cx5ext4dpnh5ex99gfck686nxkiuk9uouy
+![download](https://user-images.githubusercontent.com/650038/97703969-70d90c80-1aa9-11eb-80b6-30bfad6dce31.png)
