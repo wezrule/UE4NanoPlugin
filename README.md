@@ -11,6 +11,9 @@ Features include: functions for processing blocks, creating seeds + reading/savi
 3 - The rpc/websocket settings are located in NanoGameInstance blueprint (leave unchanged to use the publically available servers)  
 4 - Run the map, first create a seed then top up the account and try all the other functions (a video is coming soon demonstrating this)  
 
+The test level:  
+![Windows1](https://user-images.githubusercontent.com/650038/97644668-d514b580-1a42-11eb-9e21-4c65283132c1.PNG)  
+
 ### How to add the plugin to your project
 1. Copy `Plugins` folder to an Unreal Engine project root directory.  
 2. Build your project   
@@ -45,15 +48,16 @@ Always check the `Error` boolean in all event responses, e.g:
 Recommendation setups for:
 #### Arcade machines
 Listen to payment - Have 1 seed per arcade machine, start at first index then increment each time a payment is needed. This only checks pending blocks, don't have anything else pocketing these funds automatically. Every time a new payment is needed, move to the next index. Only 1 payment can be listening at any 1 time!  
-Create a QR code for the account/amount required  
+Create a QR code for the account/amount required:  
 ![CreateQRcodeAccount](https://user-images.githubusercontent.com/650038/97642695-b9f37700-1a3d-11eb-856c-a6f8ce0a4ce7.PNG)  
-Then listen for the payment  
+It looks like this:  
+![qrcode](https://user-images.githubusercontent.com/650038/97644667-d3e38880-1a42-11eb-99dc-135c0a355ac9.PNG)  
+Then listen for the payment:  
 ![ListenForPayment](https://user-images.githubusercontent.com/650038/97642704-be1f9480-1a3d-11eb-8f3b-dcefcdb9f189.PNG)  
 If wanting to cancel it:  
 ![ListenPaymentCancel](https://user-images.githubusercontent.com/650038/97642706-bfe95800-1a3d-11eb-81e0-b70944e628be.PNG)  
-For payouts do a similar process with showing a QR Code (use the variant taking a private key):  
+For payouts do a similar process with showing a QR Code (use the variant taking a private key), and listen for payout:  
 ![ListenPayoutAndCancel](https://user-images.githubusercontent.com/650038/97642711-c11a8500-1a3d-11eb-850b-423874087fba.PNG)  
-![ListenUnlistenAllConfirmation](https://user-images.githubusercontent.com/650038/97642714-c24bb200-1a3d-11eb-9a53-735eb3d6f395.PNG)  
 
 #### Single player  
 Create seed for player and store it encrypted with password (also check for local seed files if they want to open them)  
@@ -66,7 +70,7 @@ Save seed:
 ![Save seed](https://user-images.githubusercontent.com/650038/97642731-cf68a100-1a3d-11eb-8f77-22e0cabc01a3.PNG)  
 
 Send and wait for confirmation:  
-
+![sendwaitconfirmation](https://user-images.githubusercontent.com/650038/97644323-eb6e4180-1a41-11eb-9975-930305f6d581.PNG)  
 
 #### Multiplayer  
 Process seed (as above)
@@ -78,6 +82,9 @@ Server does validation (checks block is valid) then does appropriate action
 ### Utility functions 
 Automatically pocket any pending funds
 ![AutomaticallyPocketUnpocket](https://user-images.githubusercontent.com/650038/97642693-b829b380-1a3d-11eb-956f-c7b3ea57986a.PNG)
+
+Listen to all websocket confirmations
+![ListenUnlistenAllConfirmation](https://user-images.githubusercontent.com/650038/97642714-c24bb200-1a3d-11eb-9a53-735eb3d6f395.PNG)  
 
 ### Other functions
 
@@ -135,7 +142,7 @@ Limitations
 **Other (e.g Android/iOS)**  
 `<project folder>/NanoGames`
 
-Working on various systems:  
+Working on various other platforms:  
 ![AndroidPlay](https://user-images.githubusercontent.com/650038/97642692-b6f88680-1a3d-11eb-886e-aa5d97fa5bef.png)  
 ![MacEditor](https://user-images.githubusercontent.com/650038/97642718-c677cf80-1a3d-11eb-82cc-9b660abb6ab7.png)  
 
