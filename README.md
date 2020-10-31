@@ -13,6 +13,8 @@ Features include: functions for processing blocks, creating seeds + reading/savi
 
 The test level:  
 ![Windows1](https://user-images.githubusercontent.com/650038/97644668-d514b580-1a42-11eb-9e21-4c65283132c1.PNG)  
+Video explaining the test level:  
+https://youtu.be/ApwjaQUfr90
 
 ### How to add the plugin to your project
 1. Copy `Plugins` folder to an Unreal Engine project root directory.  
@@ -31,6 +33,9 @@ A http server (for RPC requests) is definitely needed for communicating with the
 `NanoBlueprintLibrary.cpp` contains various generic functions such as creating seeds, encrypting/decrypting them using AES with a password, converting to accounts, converting between Raw and Nano and various other things.  
 `NanoWebsocket.cpp` maintains the websocket connection to the proxies.
 `NanoManager.cpp` is where the other functionality is located
+
+Video explaining how to integrate the plugin:  
+https://youtu.be/HC_ps_8i-m8
 
 ### Some notes when  hooking the plugin into your game
 Anything with \*WaitForConfirmation in the name requires that the account being utilised has been `Watch`ed. This means that the websocket filtered connection is listening for events for this account, this creates a better user experience as websocket events are received as soon as the node processing them. All these functions have fallback methods which involve polling the node periodically (generally every 5 seconds). Anything taking a Websocket argument doesn't require explicit listening (such as the listening payment and payout functions). For watching (and unwatching an account):  
