@@ -119,10 +119,8 @@ Checking if a block is confirmed:
 Request nano:  
 ![requestnano](https://user-images.githubusercontent.com/650038/97642730-cf68a100-1a3d-11eb-9b0a-94b28561f7fa.PNG)  
 
-There are various helpful videos, I suggest watching them in this order:
-- Shows the plugin integrated with the ActionRPG sample game https://www.youtube.com/watch?v=gMtzOkaNnXc  
-- Video tutorial showing the test level: Coming soon  
-- Video tutorial showing how to integrate into a game: Coming soon  
+A video showing the plugin integrated with the ActionRPG sample game https://www.youtube.com/watch?v=gMtzOkaNnXc  
+A playable multiplayer game with Nano integrated: https://unreal.nanos.cc/
 
 Limitations
 - The test servers should not be used in production due to lack of security/ddos protection. Likely canditates for a future version are the NanoRPCProxy.
