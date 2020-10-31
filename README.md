@@ -53,8 +53,6 @@ Create a QR code for the account/amount required:
 It looks like this:  
 ![qrcode](https://user-images.githubusercontent.com/650038/97644667-d3e38880-1a42-11eb-99dc-135c0a355ac9.PNG)  
 Then listen for the payment:  
-![ListenForPayment](https://user-images.githubusercontent.com/650038/97642704-be1f9480-1a3d-11eb-8f3b-dcefcdb9f189.PNG)  
-If wanting to cancel it:  
 ![ListenPaymentCancel](https://user-images.githubusercontent.com/650038/97642706-bfe95800-1a3d-11eb-81e0-b70944e628be.PNG)  
 For payouts do a similar process with showing a QR Code (use the variant taking a private key), and listen for payout:  
 ![ListenPayoutAndCancel](https://user-images.githubusercontent.com/650038/97642711-c11a8500-1a3d-11eb-850b-423874087fba.PNG)  
