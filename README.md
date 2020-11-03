@@ -14,7 +14,7 @@ Features include: functions for processing blocks, creating seeds + reading/savi
 The test level:  
 ![Windows1](https://user-images.githubusercontent.com/650038/97644668-d514b580-1a42-11eb-9e21-4c65283132c1.PNG)  
 Video explaining the test level:  
-https://youtu.be/ApwjaQUfr90
+https://youtu.be/RTD2b78X1oc
 
 ### How to add the plugin to your project
 1. Copy `Plugins` folder to an Unreal Engine project root directory.  
