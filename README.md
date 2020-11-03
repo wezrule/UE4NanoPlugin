@@ -21,11 +21,13 @@ https://youtu.be/RTD2b78X1oc
 2. Build your project   
 
 ### To run your own test servers (recommended for any intense testing)
-1. Modify the `config.js` settings to be applicable for your system.
-2. Run the nano_node after enabling rpc and websocket in `config-node.toml` file.
-3. `nano_node --daemon`
+Requires a nano node, npm and nodejs installed.
+1. Run the nano_node after enabling rpc and websocket in `config-node.toml` file.
+`nano_node --daemon`
+2. cd TestServer
+3. Modify the `config.js` settings to be applicable for your system.
 4. `npm install`
-5. `./server.js`
+5. `node server.js`
 
 A nano node is required to be running which the websocket & http server (for RPC request) will talk with. Websocket & RPC should be enabled in the `node-config.toml` nano file. 
 A http server (for RPC requests) is definitely needed for communicating with the nano node via JSON-RPC, a test node.js server is supplied for this called `server.js`. A websocket server to receive notifications from nano network is highly recommended to make the most use of the plugin functionality. Another test server called `websocket_node.js` is supplied for this, both are found in the ./TestServer directory. Running `server.js` will also run `websocket_node.js`. The websocket script makes 2 connections to the node, 1 is filtered output and 1 gets all websocket events (usual for visualisers). If you only need filtered output (recommended!) then disable `allow_listen_all=false` in `config.js`.  
