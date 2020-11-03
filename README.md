@@ -24,7 +24,7 @@ https://youtu.be/RTD2b78X1oc
 Requires a nano node, npm and nodejs installed.
 1. Run the nano_node after enabling rpc and websocket in `config-node.toml` file.
 `nano_node --daemon`
-2. cd TestServer
+2. `cd TestServer`
 3. Modify the `config.js` settings to be applicable for your system.
 4. `npm install`
 5. `node server.js`
