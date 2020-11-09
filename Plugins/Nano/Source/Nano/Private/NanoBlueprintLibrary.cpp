@@ -10,6 +10,7 @@
 
 #include <baseconverter/base_converter.hpp>
 #include <duthomhas/csprng.hpp>
+#include <cctype>
 #include <memory>
 #include <qrcode/QrCode.hpp>
 #include <sha256/sha256.hpp>
