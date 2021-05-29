@@ -7,7 +7,7 @@
     "express": "^4.17.1",
     "node-fetch": "^2.6.1",
     "reconnecting-websocket": "^4.1.10",
-    "ws": "^7.1.2"
+    "ws": "^7.4.6"
   },
   "devDependencies": {},
   "scripts": {
